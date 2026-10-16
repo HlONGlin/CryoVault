@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, QrCode, Settings2 } from "lucide-react";
+import { ArrowLeft, Loader2, QrCode, Settings2, Snowflake } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -109,7 +109,8 @@ export function GroupDetail() {
         </Link>
         <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold text-white">{group.name}</h1>
+            <div className="vault-kicker flex items-center gap-2"><Snowflake className="h-3.5 w-3.5" /> Vault unit {String(group.id).padStart(2, "0")}</div>
+            <h1 className="mt-2 truncate text-2xl font-semibold tracking-wide text-ice-100">{group.name}</h1>
             <p className="mt-1 text-sm text-slate-400">
               {group.description || "无描述"}
             </p>

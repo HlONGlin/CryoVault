@@ -4,6 +4,7 @@ import {
   Loader2,
   Plus,
   QrCode,
+  Snowflake,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -80,9 +81,10 @@ export function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white">分组管理</h1>
+          <div className="vault-kicker flex items-center gap-2"><Snowflake className="h-3.5 w-3.5" /> Vault console / 01</div>
+          <h1 className="mt-2 text-2xl font-semibold tracking-wide text-ice-100">冷冻数据舱</h1>
           <p className="mt-1 text-sm text-slate-400">
-            创建分组、上传文件，然后生成二维码分享给需要的人。
+            将文件封存到分组保险库，通过二维码安全交付。
           </p>
         </div>
         <button className="btn-primary self-start" onClick={() => setCreateOpen(true)}>
@@ -123,7 +125,8 @@ export function Dashboard() {
             <div key={group.id} className="card flex flex-col gap-3 p-4 transition hover:border-frost-500/40">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="truncate text-base font-semibold text-white">{group.name}</h3>
+            <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-frost-400/70">Vault unit {String(group.id).padStart(2, "0")}</div>
+            <h3 className="truncate text-base font-semibold text-ice-100">{group.name}</h3>
                   <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">
                     {group.description || "无描述"}
                   </p>

@@ -17,15 +17,16 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-ink-950/70 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-frost-400/10 bg-[#06111b]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-frost-500/15 text-frost-400 ring-1 ring-frost-500/30">
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-frost-300/35 bg-frost-500/10 text-frost-300 shadow-frost">
               <Snowflake className="h-5 w-5" />
+              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-frost-300 shadow-[0_0_10px_#c4f7ff]" />
             </span>
             <span className="flex flex-col leading-none">
-              <span className="text-sm font-semibold tracking-wide text-white">CryoVault</span>
-              <span className="text-[11px] text-slate-500">冷库网盘 · 分组分享</span>
+              <span className="text-sm font-semibold tracking-[0.08em] text-ice-100">CryoVault</span>
+              <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-frost-400/70">Cryogenic data vault</span>
             </span>
           </Link>
           <button
@@ -44,8 +45,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
 
-      <footer className="border-t border-white/5 py-4 text-center text-xs text-slate-600">
-        CryoVault · 本地文件系统 + SQLite · 局域网自托管网盘
+      <footer className="border-t border-frost-400/10 py-4 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-slate-600">
+        CryoVault · cold storage protocol · local vault
       </footer>
 
       <Modal

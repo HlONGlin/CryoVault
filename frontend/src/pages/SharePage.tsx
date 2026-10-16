@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Loader2, Share2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Share2, Snowflake } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -69,11 +69,11 @@ export function SharePage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-frost-400">
-            <Share2 className="h-4 w-4" />
-            Shared vault
+          <div className="vault-kicker flex items-center gap-2">
+            <Snowflake className="h-3.5 w-3.5" />
+            CryoVault / shared unit
           </div>
-          <h1 className="mt-2 truncate text-2xl font-semibold text-white">{info.name}</h1>
+          <h1 className="mt-2 truncate text-2xl font-semibold tracking-wide text-ice-100">{info.name}</h1>
           <p className="mt-1 text-sm text-slate-400">{info.description || "共享文件分组"}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
