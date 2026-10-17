@@ -6,21 +6,27 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  Share2,
   TextCursorInput,
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 
-import type { FileItem, FileKind, TextContent } from "../api";
+import type { FileItem, FileKind, FileShareInfo, TextContent } from "../api";
 import { formatBytes, formatDate, kindMeta } from "../lib/format";
+import { useTheme } from "../theme";
 import { FileIcon } from "./FileIcon";
+import { FileShareDialog } from "./FileShareDialog";
 import { MediaPlayerModal } from "./MediaPlayerModal";
 import { Modal } from "./Modal";
-import { TextEditorModal } from "./TextEditorModal";
+
+const TextEditorModal = lazy(() =>
+  import("./TextEditorModal").then((m) => ({ default: m.TextEditorModal }))
+);
 
 export interface BrowserAdapter {
   list: () => Promise<FileItem[]>;
@@ -31,6 +37,9 @@ export interface BrowserAdapter {
   remove?: (file: FileItem) => Promise<unknown>;
   rename?: (file: FileItem, name: string) => Promise<unknown>;
   upload?: (files: File[]) => Promise<unknown>;
+  getShare?: (file: FileItem) => Promise<FileShareInfo | null>;
+  createShare?: (file: FileItem, allowEdit: boolean) => Promise<FileShareInfo>;
+  revokeShare?: (file: FileItem) => Promise<void>;
 }
 
 type Filter = "all" | FileKind;
@@ -51,6 +60,7 @@ export function FileBrowser({
   adapter: BrowserAdapter;
   emptyHint?: string;
 }) {
+  const { theme } = useTheme();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +74,7 @@ export function FileBrowser({
   const [lightboxFile, setLightboxFile] = useState<FileItem | null>(null);
   const [renaming, setRenaming] = useState<FileItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [sharing, setSharing] = useState<FileItem | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -99,11 +110,16 @@ export function FileBrowser({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return files.filter(
-      (f) => (filter === "all" || f.kind === filter) && (!q || f.name.toLowerCase().includes(q))
+      (f) =>
+        (filter === "all" || f.kind === filter) &&
+        (!q || f.name.toLowerCase().includes(q))
     );
   }, [files, filter, query]);
 
-  const images = useMemo(() => filtered.filter((f) => f.kind === "image"), [filtered]);
+  const images = useMemo(
+    () => filtered.filter((f) => f.kind === "image"),
+    [filtered]
+  );
   const lightboxIndex = lightboxFile
     ? Math.max(0, images.findIndex((f) => f.id === lightboxFile.id))
     : 0;
@@ -154,7 +170,11 @@ export function FileBrowser({
     }
     try {
       const updated = await adapter.rename(renaming, name);
-      setFiles((prev) => prev.map((f) => (f.id === renaming.id ? { ...f, ...(updated as object) } : f)));
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === renaming.id ? { ...f, ...(updated as object) } : f
+        )
+      );
       setRenaming(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -163,27 +183,37 @@ export function FileBrowser({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
               className={clsx(
-                "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
                 filter === key
-                  ? "bg-frost-500/15 text-frost-400 ring-1 ring-frost-500/40"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                  ? "bg-[var(--accent-soft)] text-app-accent ring-1 ring-[var(--border-strong)]"
+                  : "text-app-muted hover:bg-app-panel3 hover:text-app-text"
               )}
             >
               {label}
-              <span className="ml-1 text-[10px] opacity-70">{counts[key]}</span>
+              <span
+                className={clsx(
+                  "rounded px-1 text-[10px]",
+                  filter === key
+                    ? "bg-[var(--accent-soft)] text-app-accent"
+                    : "bg-app-panel2 text-app-faint"
+                )}
+              >
+                {counts[key]}
+              </span>
             </button>
           ))}
         </div>
+
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <div className="relative flex-1 lg:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
             <input
               className="input pl-9"
               placeholder="搜索文件名"
@@ -191,7 +221,12 @@ export function FileBrowser({
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <button className="btn-ghost p-2.5" onClick={refresh} aria-label="刷新">
+          <button
+            className="btn-outline p-2.5"
+            onClick={refresh}
+            aria-label="刷新"
+            title="刷新"
+          >
             <RefreshCw className={clsx("h-4 w-4", loading && "animate-spin")} />
           </button>
           {adapter.upload && (
@@ -224,7 +259,7 @@ export function FileBrowser({
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-2.5 text-sm text-app-danger">
           {error}
         </div>
       )}
@@ -244,26 +279,33 @@ export function FileBrowser({
         }}
         className={clsx(
           "relative rounded-2xl transition",
-          dragActive && "ring-2 ring-frost-500/60"
+          dragActive && "ring-2 ring-[var(--accent)]"
         )}
       >
         {dragActive && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-ink-950/70">
-            <div className="flex flex-col items-center gap-2 text-frost-400">
+          <div
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl backdrop-blur-sm"
+            style={{ background: "var(--overlay)" }}
+          >
+            <div className="flex flex-col items-center gap-2 text-app-accent">
               <UploadCloud className="h-8 w-8" />
-              <span className="text-sm">松开即可上传</span>
+              <span className="text-sm font-medium">松开即可上传</span>
             </div>
           </div>
         )}
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center text-slate-400">
+          <div className="flex h-48 items-center justify-center text-app-muted">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 text-slate-500">
-            <FileGlyph className="h-6 w-6" />
-            <span className="text-sm">{files.length === 0 ? emptyHint : "没有匹配的文件"}</span>
+          <div className="flex h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-app-border bg-app-panel2 text-app-faint">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-app-border bg-app-panel3 text-app-accent">
+              <FileGlyph className="h-6 w-6" />
+            </div>
+            <span className="text-sm">
+              {files.length === 0 ? emptyHint : "没有匹配的文件"}
+            </span>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -271,23 +313,45 @@ export function FileBrowser({
               <FileCard
                 key={file.id}
                 file={file}
-                thumbnail={file.kind === "image" ? adapter.rawUrl(file) : undefined}
+                thumbnail={
+                  file.kind === "image" ? adapter.rawUrl(file) : undefined
+                }
                 onOpen={() => open(file)}
-                onDownload={() => window.open(adapter.downloadUrl(file), "_blank")}
+                onDownload={() =>
+                  window.open(adapter.downloadUrl(file), "_blank")
+                }
+                onShare={
+                  adapter.createShare ? () => setSharing(file) : undefined
+                }
                 onRename={adapter.rename ? () => startRename(file) : undefined}
-                onDelete={adapter.remove ? () => confirmDelete(file) : undefined}
+                onDelete={
+                  adapter.remove ? () => confirmDelete(file) : undefined
+                }
               />
             ))}
           </div>
         )}
       </div>
 
-      <TextEditorModal
-        file={editing}
-        onClose={() => setEditing(null)}
-        load={adapter.getContent}
-        save={adapter.saveContent}
-      />
+      {editing && (
+        <Suspense
+          fallback={
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
+              style={{ background: "var(--overlay)" }}
+            >
+              <Loader2 className="h-5 w-5 animate-spin text-app-accent" />
+            </div>
+          }
+        >
+          <TextEditorModal
+            file={editing}
+            onClose={() => setEditing(null)}
+            load={adapter.getContent}
+            save={adapter.saveContent}
+          />
+        </Suspense>
+      )}
 
       <MediaPlayerModal
         file={playing}
@@ -301,9 +365,27 @@ export function FileBrowser({
         close={() => setLightboxFile(null)}
         index={lightboxIndex}
         plugins={[Zoom]}
-        slides={images.map((f) => ({ src: adapter.rawUrl(f), title: f.name }))}
-        styles={{ container: { backgroundColor: "rgba(7,11,20,0.95)" } }}
+        slides={images.map((f) => ({
+          src: adapter.rawUrl(f),
+          title: f.name,
+        }))}
+        styles={{
+          container: {
+            backgroundColor:
+              theme === "dark" ? "rgba(4,12,19,0.96)" : "rgba(233,244,249,0.97)",
+          },
+        }}
       />
+
+      {adapter.getShare && adapter.createShare && (
+        <FileShareDialog
+          file={sharing}
+          onClose={() => setSharing(null)}
+          getShare={adapter.getShare}
+          createShare={adapter.createShare}
+          revokeShare={adapter.revokeShare}
+        />
+      )}
 
       <Modal
         open={renaming !== null}
@@ -338,17 +420,26 @@ interface FileCardProps {
   thumbnail?: string;
   onOpen: () => void;
   onDownload: () => void;
+  onShare?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
 }
 
-function FileCard({ file, thumbnail, onOpen, onDownload, onRename, onDelete }: FileCardProps) {
+function FileCard({
+  file,
+  thumbnail,
+  onOpen,
+  onDownload,
+  onShare,
+  onRename,
+  onDelete,
+}: FileCardProps) {
   const meta = kindMeta[file.kind];
   return (
-    <div className="card group relative flex flex-col overflow-hidden transition hover:border-frost-500/40 hover:shadow-glow">
+    <article className="card card-hover group relative flex flex-col overflow-hidden">
       <button
         onClick={onOpen}
-        className="relative flex h-32 items-center justify-center overflow-hidden bg-ink-900/60"
+        className="relative flex h-32 items-center justify-center overflow-hidden bg-app-panel2"
         title={file.name}
       >
         {thumbnail ? (
@@ -356,31 +447,37 @@ function FileCard({ file, thumbnail, onOpen, onDownload, onRename, onDelete }: F
             src={thumbnail}
             alt={file.name}
             loading="lazy"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
           <div className={clsx("flex flex-col items-center gap-2", meta.accent)}>
             <FileIcon file={file} className="h-9 w-9" />
-            <span className="text-[11px] uppercase tracking-wide opacity-80">
+            <span className="text-[11px] uppercase tracking-[0.14em] opacity-80">
               {meta.label}
             </span>
           </div>
         )}
+        <span className="badge absolute left-2 top-2 bg-app-panel backdrop-blur">
+          {meta.label}
+        </span>
       </button>
 
-      <div className="flex flex-1 flex-col gap-1 p-3">
+      <div className="flex flex-1 flex-col gap-1.5 p-3.5">
         <div className="flex items-start gap-2">
-          <FileIcon file={file} className={clsx("mt-0.5 h-4 w-4 shrink-0", meta.accent)} />
-          <span className="line-clamp-2 break-all text-sm font-medium text-slate-100">
+          <FileIcon
+            file={file}
+            className={clsx("mt-0.5 h-4 w-4 shrink-0", meta.accent)}
+          />
+          <span className="line-clamp-2 break-all text-sm font-medium text-app-text">
             {file.name}
           </span>
         </div>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-app-faint">
           {formatBytes(file.size)} · {formatDate(file.updated_at)}
         </span>
       </div>
 
-      <div className="flex items-center gap-0.5 border-t border-white/5 px-2 py-1.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+      <div className="flex items-center gap-0.5 border-t border-app-border px-2 py-1.5 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
         {file.kind === "text" && (
           <button className="btn-ghost p-2" onClick={onOpen} title="打开 / 编辑">
             <Pencil className="h-4 w-4" />
@@ -389,6 +486,15 @@ function FileCard({ file, thumbnail, onOpen, onDownload, onRename, onDelete }: F
         <button className="btn-ghost p-2" onClick={onDownload} title="下载">
           <Download className="h-4 w-4" />
         </button>
+        {onShare && (
+          <button
+            className="btn-ghost p-2"
+            onClick={onShare}
+            title="生成单文件链接/二维码"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
+        )}
         {onRename && (
           <button className="btn-ghost p-2" onClick={onRename} title="重命名">
             <TextCursorInput className="h-4 w-4" />
@@ -401,6 +507,6 @@ function FileCard({ file, thumbnail, onOpen, onDownload, onRename, onDelete }: F
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }

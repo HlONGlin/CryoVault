@@ -1,10 +1,30 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#070b14" />
+    <meta name="theme-color" content="#06111b" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>CryoVault · 冷库网盘</title>
+    <script>
+      window.__CRYOVAULT_BASE__ = "__CRYOVAULT_PANEL_BASE__";
+    </script>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("cryovault.theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light"
+                : "dark";
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          /* ignore */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

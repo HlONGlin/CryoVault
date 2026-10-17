@@ -9,6 +9,22 @@ from fastapi.responses import Response, StreamingResponse
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 CHUNK_SIZE = 1024 * 1024
 
+# Uploaded HTML/SVG must never execute in the app origin. A sandboxed CSP keeps
+# the document in an opaque origin with scripts disabled.
+INLINE_CSP = (
+    "default-src 'none'; "
+    "img-src 'self' data: blob:; "
+    "media-src 'self' blob:; "
+    "style-src 'unsafe-inline'; "
+    "sandbox"
+)
+
+SAFE_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-origin",
+}
+
 
 def _iter_file(path: Path, start: int, length: int | None) -> Iterator[bytes]:
     with open(path, "rb") as f:
@@ -39,7 +55,10 @@ def serve_file(
     headers = {
         "Accept-Ranges": "bytes",
         "Cache-Control": "private, max-age=0, must-revalidate",
+        **SAFE_HEADERS,
     }
+    if inline:
+        headers["Content-Security-Policy"] = INLINE_CSP
     if filename:
         headers["Content-Disposition"] = (
             f"{disposition}; filename*=UTF-8''{quote(filename)}"

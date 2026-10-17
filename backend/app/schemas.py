@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from .storage import file_kind
 
@@ -57,6 +57,28 @@ class TextUpdate(BaseModel):
     content: str
 
 
+class FileShareCreate(BaseModel):
+    allow_edit: bool = False
+
+
+class FileShareOut(BaseModel):
+    share_token: str
+    allow_edit: bool
+    created_at: datetime
+    file: FileDetail
+
+
+class PublicFileShare(BaseModel):
+    share_token: str
+    allow_edit: bool
+    file: FileDetail
+
+
+class DirectInfo(BaseModel):
+    group_id: int
+    files: list[FileDetail]
+
+
 def to_file_out(f) -> FileDetail:
     return FileDetail(
         id=f.id,
@@ -67,6 +89,23 @@ def to_file_out(f) -> FileDetail:
         kind=file_kind(f.name, f.mime_type),
         created_at=f.created_at,
         updated_at=f.updated_at,
+    )
+
+
+def to_file_share_out(share) -> FileShareOut:
+    return FileShareOut(
+        share_token=share.share_token,
+        allow_edit=share.allow_edit,
+        created_at=share.created_at,
+        file=to_file_out(share.file),
+    )
+
+
+def to_public_file_share(share) -> PublicFileShare:
+    return PublicFileShare(
+        share_token=share.share_token,
+        allow_edit=share.allow_edit,
+        file=to_file_out(share.file),
     )
 
 

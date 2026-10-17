@@ -1,23 +1,23 @@
-from fastapi import Header, HTTPException, Query, status
+from fastapi import Cookie, HTTPException, status
 
 from .config import settings
+from .security import session_matches
 
 
 async def require_admin(
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
-    token: str | None = Query(default=None),
+    session: str | None = Cookie(default=None, alias=settings.session_cookie),
 ) -> None:
-    """Guard admin endpoints.
+    """Guard admin endpoints with the HttpOnly session cookie.
 
-    The token may be sent via the ``X-Admin-Token`` header (used by fetch calls)
-    or the ``token`` query parameter (used by ``<img>`` / ``<video>`` sources that
-    cannot set custom headers). No-op when CRYOVAULT_ADMIN_TOKEN is unset.
+    The raw admin token is only accepted by ``POST /api/admin/session``, which
+    is rate limited. Every other admin endpoint therefore cannot be used as an
+    unlimited brute-force oracle.
     """
     if not settings.admin_token:
         return
-    if x_admin_token == settings.admin_token or token == settings.admin_token:
+    if session_matches(session):
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or missing admin token",
+        detail="Invalid or missing admin session",
     )

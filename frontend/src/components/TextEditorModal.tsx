@@ -1,15 +1,12 @@
-import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { python } from "@codemirror/lang-python";
-import { yaml } from "@codemirror/lang-yaml";
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
 import { Loader2, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { FileItem, TextContent } from "../api";
+import { extensionsFor } from "../lib/codemirror";
 import { languageFor } from "../lib/format";
+import { useTheme } from "../theme";
 import { Modal } from "./Modal";
 
 interface TextEditorModalProps {
@@ -20,24 +17,14 @@ interface TextEditorModalProps {
   readOnly?: boolean;
 }
 
-function extensionsFor(name: string) {
-  switch (languageFor(name)) {
-    case "json":
-      return [json()];
-    case "yaml":
-      return [yaml()];
-    case "markdown":
-      return [markdown()];
-    case "python":
-      return [python()];
-    case "javascript":
-      return [javascript({ jsx: true, typescript: true })];
-    default:
-      return [];
-  }
-}
-
-export function TextEditorModal({ file, onClose, load, save, readOnly }: TextEditorModalProps) {
+export function TextEditorModal({
+  file,
+  onClose,
+  load,
+  save,
+  readOnly,
+}: TextEditorModalProps) {
+  const { theme } = useTheme();
   const [content, setContent] = useState("");
   const [original, setOriginal] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,7 +54,10 @@ export function TextEditorModal({ file, onClose, load, save, readOnly }: TextEdi
     };
   }, [file, load]);
 
-  const extensions = useMemo(() => (file ? extensionsFor(file.name) : []), [file]);
+  const extensions = useMemo(
+    () => (file ? extensionsFor(file.name) : []),
+    [file]
+  );
 
   async function handleSave() {
     if (!file || !save) return;
@@ -98,16 +88,28 @@ export function TextEditorModal({ file, onClose, load, save, readOnly }: TextEdi
       }
       footer={
         <>
-          {error && <span className="mr-auto text-xs text-rose-300">{error}</span>}
+          {error && (
+            <span className="mr-auto text-xs text-app-danger">{error}</span>
+          )}
           {savedAt && !error && (
-            <span className="mr-auto text-xs text-emerald-300">已保存 {savedAt}</span>
+            <span className="mr-auto text-xs text-emerald-600 dark:text-emerald-300">
+              已保存 {savedAt}
+            </span>
           )}
           <button className="btn-outline" onClick={onClose}>
             关闭
           </button>
           {editable && (
-            <button className="btn-primary" onClick={handleSave} disabled={saving || !dirty}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={saving || !dirty}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               保存
             </button>
           )}
@@ -115,14 +117,14 @@ export function TextEditorModal({ file, onClose, load, save, readOnly }: TextEdi
       }
     >
       {loading ? (
-        <div className="flex h-64 items-center justify-center text-slate-400">
+        <div className="flex h-64 items-center justify-center text-app-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : (
         <CodeMirror
           value={content}
           height="60vh"
-          theme={oneDark}
+          theme={theme === "dark" ? oneDark : "light"}
           editable={editable}
           extensions={extensions}
           onChange={setContent}

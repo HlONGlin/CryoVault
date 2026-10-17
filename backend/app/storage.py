@@ -29,6 +29,15 @@ def extension(name: str) -> str:
 
 
 def file_kind(name: str, mime_type: str = "") -> str:
+    # Trust an explicit media type first: ".ts" is both MPEG-TS video and
+    # TypeScript source, so the browser-provided MIME resolves the ambiguity.
+    if mime_type.startswith("video/"):
+        return "video"
+    if mime_type.startswith("audio/"):
+        return "audio"
+    if mime_type.startswith("image/"):
+        return "image"
+
     ext = extension(name)
     if ext in TEXT_EXTENSIONS:
         return "text"
@@ -41,12 +50,6 @@ def file_kind(name: str, mime_type: str = "") -> str:
 
     if mime_type.startswith("text/"):
         return "text"
-    if mime_type.startswith("image/"):
-        return "image"
-    if mime_type.startswith("video/"):
-        return "video"
-    if mime_type.startswith("audio/"):
-        return "audio"
     if mime_type in {"application/json", "application/xml", "application/yaml"}:
         return "text"
     return "other"

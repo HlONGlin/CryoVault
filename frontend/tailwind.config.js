@@ -1,9 +1,25 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
+        app: {
+          bg: "var(--bg)",
+          panel: "var(--panel)",
+          panel2: "var(--panel-2)",
+          panel3: "var(--panel-3)",
+          border: "var(--border)",
+          "border-strong": "var(--border-strong)",
+          text: "var(--text)",
+          muted: "var(--muted)",
+          faint: "var(--faint)",
+          accent: "var(--accent)",
+          "accent-strong": "var(--accent-strong)",
+          contrast: "var(--accent-contrast)",
+          danger: "var(--danger)",
+        },
         ink: {
           950: "#070b14",
           900: "#0b1120",
@@ -37,17 +53,23 @@ export default {
         mono: ["JetBrains Mono", "Consolas", "Menlo", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(66,201,230,0.28), 0 18px 40px -20px rgba(24,173,212,0.45)",
-        frost: "inset 0 1px 0 rgba(255,255,255,0.12), 0 14px 32px -22px rgba(66,201,230,0.8)",
+        glow: "0 0 0 1px var(--border-strong), 0 18px 40px -20px var(--glow)",
+        frost:
+          "inset 0 1px 0 rgba(255,255,255,0.14), 0 14px 32px -22px var(--glow)",
       },
       keyframes: {
         "fade-up": {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "soft-pulse": {
+          "0%, 100%": { opacity: "0.55" },
+          "50%": { opacity: "1" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.25s ease-out",
+        "soft-pulse": "soft-pulse 3.5s ease-in-out infinite",
       },
     },
   },

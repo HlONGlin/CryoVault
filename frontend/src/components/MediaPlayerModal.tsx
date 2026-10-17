@@ -10,7 +10,12 @@ interface MediaPlayerModalProps {
   onClose: () => void;
 }
 
-export function MediaPlayerModal({ file, src, downloadUrl, onClose }: MediaPlayerModalProps) {
+export function MediaPlayerModal({
+  file,
+  src,
+  downloadUrl,
+  onClose,
+}: MediaPlayerModalProps) {
   const isVideo = file?.kind === "video";
   return (
     <Modal

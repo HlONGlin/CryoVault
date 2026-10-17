@@ -70,7 +70,7 @@ install_system_dependencies() {
             log "检测到 Debian/Ubuntu，安装运行依赖..."
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                ca-certificates curl tar python3 python3-venv python3-pip nodejs npm
+                ca-certificates curl tar python3 python3-venv python3-pip
             ;;
         dnf)
             log "检测到 Fedora/RHEL，安装运行依赖..."
@@ -111,25 +111,76 @@ ensure_runtime() {
     fi
 
     [ -n "$PYTHON_BIN" ] || die "未找到 Python 3。"
-    command -v node >/dev/null 2>&1 || die "未找到 Node.js。"
-    command -v npm >/dev/null 2>&1 || die "未找到 npm。"
 
     python_version="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
     python_ok="$($PYTHON_BIN -c 'import sys; print(int(sys.version_info >= (3, 10)))')"
     [ "$python_ok" = "1" ] || die "CryoVault 需要 Python 3.10 或更高版本，当前为 $python_version。"
 
-    node_major="$(node -p 'process.versions.node.split(".")[0]')"
-    [ "$node_major" -ge 18 ] || die "CryoVault 前端构建需要 Node.js 18 或更高版本，当前为 $(node --version)。"
+    ensure_node
+}
+
+ensure_node() {
+    node_major=0
+    if command -v node >/dev/null 2>&1; then
+        node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || printf '0')"
+    fi
+    if [ "$node_major" -ge 18 ] 2>/dev/null && command -v npm >/dev/null 2>&1; then
+        return
+    fi
+
+    package_manager="$(detect_package_manager)"
+    log "安装或升级 Node.js 20..."
+    case "$package_manager" in
+        apt)
+            command -v curl >/dev/null 2>&1 || DEBIAN_FRONTEND=noninteractive apt-get install -y curl
+            curl -fsSL https://deb.nodesource.com/setup_20.x -o /tmp/nodesource_setup.sh \
+                || die "下载 NodeSource 安装脚本失败。"
+            bash /tmp/nodesource_setup.sh
+            DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+            ;;
+        dnf)
+            dnf module enable -y nodejs:20 >/dev/null 2>&1 || true
+            dnf install -y nodejs npm || dnf install -y nodejs
+            ;;
+        yum)
+            yum module enable -y nodejs:20 >/dev/null 2>&1 || true
+            yum install -y nodejs npm || yum install -y nodejs
+            ;;
+        apk)
+            apk add --no-cache nodejs npm
+            ;;
+        *)
+            die "无法自动安装 Node.js 18+，请手动安装后重试。"
+            ;;
+    esac
+
+    command -v node >/dev/null 2>&1 || die "Node.js 安装失败。"
+    command -v npm >/dev/null 2>&1 || die "npm 安装失败。"
+    node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || printf '0')"
+    [ "$node_major" -ge 18 ] 2>/dev/null || die "需要 Node.js 18 或更高版本，当前为 $(node --version)。"
 }
 
 ensure_app_user() {
-    command -v useradd >/dev/null 2>&1 || die "未找到 useradd。"
     if ! id "$APP_USER" >/dev/null 2>&1; then
-        useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$APP_USER"
+        nologin_shell="/usr/sbin/nologin"
+        [ -x "$nologin_shell" ] || nologin_shell="/sbin/nologin"
+
+        if command -v useradd >/dev/null 2>&1; then
+            useradd --system --home-dir "$DATA_DIR" --shell "$nologin_shell" "$APP_USER" 2>/dev/null \
+                || useradd -r -d "$DATA_DIR" -s "$nologin_shell" "$APP_USER"
+        elif command -v adduser >/dev/null 2>&1; then
+            adduser -S -H -h "$DATA_DIR" -s "$nologin_shell" "$APP_USER"
+        else
+            die "无法创建系统用户：未找到 useradd 或 adduser。"
+        fi
     fi
+
+    APP_GROUP="$(id -gn "$APP_USER" 2>/dev/null || true)"
+    [ -n "$APP_GROUP" ] || APP_GROUP="$APP_USER"
+
     mkdir -p "$DATA_DIR"
     chmod 700 "$DATA_DIR"
-    chown -R "$APP_USER:$APP_USER" "$DATA_DIR"
+    chown -R "$APP_USER:$APP_GROUP" "$DATA_DIR"
 }
 
 read_env_value() {
@@ -168,6 +219,19 @@ generate_token() {
     od -An -N24 -tx1 /dev/urandom | tr -d ' \n'
 }
 
+generate_panel_path() {
+    printf '/panel/%s' "$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+}
+
+ensure_panel_path() {
+    panel_path="$(read_env_value CRYOVAULT_PANEL_PATH "$ENV_FILE")"
+    if [ -n "$panel_path" ]; then
+        printf '%s' "$panel_path"
+        return
+    fi
+    generate_panel_path
+}
+
 prompt_for_token() {
     existing="$(read_env_value CRYOVAULT_ADMIN_TOKEN "$ENV_FILE")"
     if [ -n "${CRYOVAULT_ADMIN_TOKEN:-}" ]; then
@@ -200,10 +264,23 @@ prompt_for_token() {
 write_env() {
     token="$1"
     port="$2"
+    panel_path="${3:-}"
     max_upload="$(read_env_value CRYOVAULT_MAX_UPLOAD_SIZE "$ENV_FILE")"
     [ -n "$max_upload" ] || max_upload="0"
+    max_text="$(read_env_value CRYOVAULT_MAX_TEXT_EDIT_SIZE "$ENV_FILE")"
+    [ -n "$max_text" ] || max_text="5242880"
+    cookie_secure="$(read_env_value CRYOVAULT_COOKIE_SECURE "$ENV_FILE")"
+    [ -n "$cookie_secure" ] || cookie_secure="false"
+    [ -n "$panel_path" ] || panel_path="$(ensure_panel_path)"
     base_url="$(read_env_value CRYOVAULT_BASE_URL "$ENV_FILE")"
     [ -n "$base_url" ] || base_url="http://localhost:$port"
+
+    extra=""
+    if [ -f "$ENV_FILE" ]; then
+        extra="$(grep -E '^CRYOVAULT_[A-Z0-9_]+=' "$ENV_FILE" \
+            | grep -vE '^CRYOVAULT_(DATA_DIR|BASE_URL|ADMIN_TOKEN|MAX_UPLOAD_SIZE|MAX_TEXT_EDIT_SIZE|COOKIE_SECURE|PANEL_PATH|DOCS_ENABLED)=' \
+            || true)"
+    fi
 
     env_tmp="$(mktemp "$DATA_DIR/.cryovault-env.XXXXXX")"
     cat > "$env_tmp" <<EOF
@@ -211,14 +288,22 @@ CRYOVAULT_DATA_DIR=$DATA_DIR
 CRYOVAULT_BASE_URL=$base_url
 CRYOVAULT_ADMIN_TOKEN=$token
 CRYOVAULT_MAX_UPLOAD_SIZE=$max_upload
+CRYOVAULT_MAX_TEXT_EDIT_SIZE=$max_text
+CRYOVAULT_COOKIE_SECURE=$cookie_secure
+CRYOVAULT_PANEL_PATH=$panel_path
+CRYOVAULT_DOCS_ENABLED=false
 EOF
-    chown "$APP_USER:$APP_USER" "$env_tmp"
+    if [ -n "$extra" ]; then
+        printf '%s\n' "$extra" >> "$env_tmp"
+    fi
+    chown "$APP_USER:$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")" "$env_tmp"
     chmod 600 "$env_tmp"
     mv -f "$env_tmp" "$ENV_FILE"
 }
 
 write_service() {
     port="$1"
+    app_group="$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")"
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=CryoVault self-hosted file vault
@@ -228,7 +313,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=$APP_USER
-Group=$APP_USER
+Group=$app_group
 WorkingDirectory=$INSTALL_DIR/backend
 EnvironmentFile=$ENV_FILE
 ExecStart=$INSTALL_DIR/backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $port
@@ -236,6 +321,9 @@ Restart=on-failure
 RestartSec=5
 PrivateTmp=true
 ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=$DATA_DIR
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
@@ -244,7 +332,13 @@ EOF
 }
 
 detect_host() {
-    host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    host="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    if [ -z "$host" ] && command -v ip >/dev/null 2>&1; then
+        host="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)"
+    fi
+    if [ -z "$host" ]; then
+        host="$(hostname -i 2>/dev/null | awk '{print $1}' || true)"
+    fi
     [ -n "$host" ] || host="127.0.0.1"
     printf '%s' "$host"
 }
@@ -264,8 +358,10 @@ install_manager() {
 
     token="$(prompt_for_token)"
     validate_token "$token" || die "管理员令牌无效。"
+    panel_path="$(ensure_panel_path)"
 
     build_root="$(mktemp -d /tmp/cryovault-install.XXXXXX)"
+    trap 'rm -rf "${build_root:-}"' EXIT
     archive="$build_root/cryovault.tar.gz"
     source_dir="$build_root/source"
     mkdir -p "$source_dir"
@@ -277,7 +373,11 @@ install_manager() {
     [ -f "$source_dir/frontend/package.json" ] || die "下载的源码不完整。"
 
     log "创建 Python 环境并安装后端依赖..."
-    "$PYTHON_BIN" -m venv "$source_dir/backend/.venv"
+    if ! "$PYTHON_BIN" -m venv "$source_dir/backend/.venv" 2>/dev/null; then
+        command -v virtualenv >/dev/null 2>&1 \
+            || die "无法创建 Python 虚拟环境，请安装 python3-venv 或 py3-virtualenv。"
+        virtualenv -p "$PYTHON_BIN" "$source_dir/backend/.venv"
+    fi
     "$source_dir/backend/.venv/bin/python" -m pip install --disable-pip-version-check -r "$source_dir/backend/requirements.txt"
 
     log "安装前端依赖并构建生产版本..."
@@ -290,17 +390,17 @@ install_manager() {
 
     old_install="$build_root/previous-install"
     old_env="$build_root/previous.env"
-    if [ -d "$INSTALL_DIR" ]; then
-        mv "$INSTALL_DIR" "$old_install"
-    fi
     if [ -f "$ENV_FILE" ]; then
         cp "$ENV_FILE" "$old_env"
     fi
 
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    if [ -d "$INSTALL_DIR" ]; then
+        mv "$INSTALL_DIR" "$old_install"
+    fi
     mv "$source_dir" "$INSTALL_DIR"
     chown -R root:root "$INSTALL_DIR"
-    write_env "$token" "$port"
+    write_env "$token" "$port" "$panel_path"
     write_service "$port"
 
     systemctl daemon-reload
@@ -311,7 +411,7 @@ install_manager() {
         rm -rf "$INSTALL_DIR"
         [ -d "$old_install" ] && mv "$old_install" "$INSTALL_DIR"
         [ -f "$old_env" ] && cp "$old_env" "$ENV_FILE"
-        chown "$APP_USER:$APP_USER" "$ENV_FILE" 2>/dev/null || true
+        chown "$APP_USER:$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")" "$ENV_FILE" 2>/dev/null || true
         systemctl daemon-reload
         systemctl restart "$SERVICE_NAME" 2>/dev/null || true
         die "CryoVault 启动失败，请查看：journalctl -u $SERVICE_NAME -n 100 --no-pager"
@@ -322,9 +422,9 @@ install_manager() {
     rm -rf "$build_root"
     host="$(detect_host)"
     log "CryoVault 安装/更新完成。"
-    printf '管理地址：http://%s:%s\n' "$host" "$port"
+    printf '管理地址：http://%s:%s%s\n' "$host" "$port" "$panel_path"
     printf '管理员令牌：%s\n' "$token"
-    printf '\n手机扫码时，请使用服务器局域网 IP 访问上面的地址。\n'
+    printf '\n访问路径包含随机后缀，请妥善保存完整地址；分享链接仍为 /s/ 和 /f/ 开头。\n'
 }
 
 start_manager() {
@@ -362,12 +462,32 @@ reset_admin() {
     fi
 
     port="$(read_current_port)"
+    panel_path="$(ensure_panel_path)"
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-    write_env "$token" "$port"
+    write_env "$token" "$port" "$panel_path"
     systemctl start "$SERVICE_NAME"
     systemctl is-active --quiet "$SERVICE_NAME" || die "令牌已写入，但服务启动失败，请查看 systemctl status $SERVICE_NAME。"
     log "管理员令牌已重置，全部文件数据已保留。"
     printf '新的管理员令牌：%s\n' "$token"
+    printf '管理地址：http://%s:%s%s\n' "$(detect_host)" "$port" "$panel_path"
+}
+
+regenerate_panel_path() {
+    require_root
+    require_systemd
+    [ -f "$SERVICE_FILE" ] || die "CryoVault 尚未安装。"
+
+    token="$(read_env_value CRYOVAULT_ADMIN_TOKEN "$ENV_FILE")"
+    [ -n "$token" ] || die "未找到现有管理员令牌，请先重置管理员令牌。"
+    port="$(read_current_port)"
+    new_path="$(generate_panel_path)"
+
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    write_env "$token" "$port" "$new_path"
+    systemctl start "$SERVICE_NAME"
+    systemctl is-active --quiet "$SERVICE_NAME" || die "服务启动失败，请查看 systemctl status $SERVICE_NAME。"
+    log "访问路径已重新生成，旧地址立即失效。"
+    printf '新的管理地址：http://%s:%s%s\n' "$(detect_host)" "$port" "$new_path"
 }
 
 uninstall_manager() {
@@ -398,10 +518,11 @@ show_menu() {
 3. 停止 CryoVault
 4. 彻底卸载并清除全部数据
 5. 重置管理员令牌（保留文件数据）
+6. 重新生成访问路径（保留文件数据）
 0. 退出
 ========================================
 EOF
-    printf '请选择 [0-5]: '
+    printf '请选择 [0-6]: '
 }
 
 require_root
@@ -416,6 +537,7 @@ while true; do
         3) stop_manager ;;
         4) uninstall_manager ;;
         5) reset_admin ;;
+        6) regenerate_panel_path ;;
         0) exit 0 ;;
         *) warn "无效选择。" ;;
     esac

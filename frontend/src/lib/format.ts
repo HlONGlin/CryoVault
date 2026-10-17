@@ -20,11 +20,11 @@ export function extension(name: string): string {
 }
 
 export const kindMeta: Record<FileKind, { label: string; accent: string }> = {
-  text: { label: "文本", accent: "text-sky-300" },
-  image: { label: "图片", accent: "text-emerald-300" },
-  video: { label: "视频", accent: "text-violet-300" },
-  audio: { label: "音频", accent: "text-amber-300" },
-  other: { label: "文件", accent: "text-slate-300" },
+  text: { label: "文本", accent: "text-sky-600 dark:text-sky-300" },
+  image: { label: "图片", accent: "text-emerald-600 dark:text-emerald-300" },
+  video: { label: "视频", accent: "text-violet-600 dark:text-violet-300" },
+  audio: { label: "音频", accent: "text-amber-600 dark:text-amber-300" },
+  other: { label: "文件", accent: "text-app-muted" },
 };
 
 export function languageFor(name: string): string {

@@ -1,8 +1,7 @@
+import clsx from "clsx";
 import { X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-
-import clsx from "clsx";
 
 interface ModalProps {
   open: boolean;
@@ -52,7 +51,8 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
       <div
-        className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-sm"
+        style={{ background: "var(--overlay)" }}
         onClick={onClose}
         aria-hidden
       />
@@ -65,16 +65,24 @@ export function Modal({
         )}
       >
         {(title || subtitle) && (
-          <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+          <header className="flex items-start justify-between gap-4 border-b border-app-border px-5 py-4">
             <div className="min-w-0">
               {title && (
-                <h2 className="truncate text-base font-semibold text-white">{title}</h2>
+                <h2 className="truncate text-base font-semibold text-app-text">
+                  {title}
+                </h2>
               )}
               {subtitle && (
-                <p className="mt-0.5 truncate text-xs text-slate-400">{subtitle}</p>
+                <p className="mt-0.5 truncate text-xs text-app-muted">
+                  {subtitle}
+                </p>
               )}
             </div>
-            <button className="btn-ghost -mr-2 -mt-1 p-2" onClick={onClose} aria-label="关闭">
+            <button
+              className="btn-ghost -mr-2 -mt-1 p-2"
+              onClick={onClose}
+              aria-label="关闭"
+            >
               <X className="h-4 w-4" />
             </button>
           </header>
@@ -83,7 +91,7 @@ export function Modal({
           {children}
         </div>
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-3">
+          <footer className="flex items-center justify-end gap-2 border-t border-app-border px-5 py-3">
             {footer}
           </footer>
         )}

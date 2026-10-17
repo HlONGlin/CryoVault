@@ -1,16 +1,65 @@
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .models import FileItem, Group
+from .models import FileItem, FileShare, Group
 from .storage import is_text
+
+SYSTEM_GROUP_NAME = "单文件分享"
 
 
 def stored_path(file: FileItem) -> Path:
     return settings.storage_dir / file.stored_name
+
+
+def get_system_group(db: Session) -> Group:
+    group = db.query(Group).filter(Group.is_system.is_(True)).first()
+    if group is None:
+        group = Group(
+            name=SYSTEM_GROUP_NAME,
+            description="直接上传并生成链接的单个文件",
+            is_system=True,
+        )
+        db.add(group)
+        db.commit()
+        db.refresh(group)
+    return group
+
+
+def get_file_share(db: Session, file: FileItem) -> FileShare | None:
+    return db.query(FileShare).filter(FileShare.file_id == file.id).first()
+
+
+def get_share_by_token(db: Session, token: str) -> FileShare | None:
+    return db.query(FileShare).filter(FileShare.share_token == token).first()
+
+
+def ensure_file_share(
+    db: Session, file: FileItem, allow_edit: bool | None = None
+) -> FileShare:
+    share = get_file_share(db, file)
+    if share is None:
+        share = FileShare(
+            file_id=file.id,
+            allow_edit=bool(allow_edit),
+        )
+        db.add(share)
+    elif allow_edit is not None:
+        share.allow_edit = allow_edit
+    db.commit()
+    db.refresh(share)
+    return share
+
+
+def revoke_file_share(db: Session, file: FileItem) -> None:
+    share = get_file_share(db, file)
+    if share is not None:
+        db.delete(share)
+        db.commit()
 
 
 def get_group_or_404(db: Session, group_id: int) -> Group:
@@ -28,7 +77,8 @@ def get_file_or_404(db: Session, file_id: int) -> FileItem:
 
 
 def save_upload(db: Session, group: Group, upload: UploadFile) -> FileItem:
-    original_name = Path(upload.filename or "untitled").name
+    raw_name = (upload.filename or "untitled").replace("\\", "/")
+    original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
     stored_name = uuid.uuid4().hex
     dest = settings.storage_dir / stored_name
 
@@ -70,6 +120,11 @@ def delete_file(db: Session, file: FileItem) -> None:
 def read_text(file: FileItem) -> str:
     if not is_text(file.name, file.mime_type):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is not a text file")
+    if file.size > settings.max_text_edit_size:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "Text file is too large to open in the editor",
+        )
     try:
         return stored_path(file).read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -81,18 +136,32 @@ def read_text(file: FileItem) -> str:
 def write_text(db: Session, file: FileItem, content: str) -> FileItem:
     if not is_text(file.name, file.mime_type):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is not a text file")
+
+    data = content.encode("utf-8")
+    if len(data) > settings.max_text_edit_size:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "Text file is too large to save",
+        )
+
     path = stored_path(file)
-    path.write_text(content, encoding="utf-8")
-    file.size = path.stat().st_size
+    tmp = path.with_name(f"{path.name}.tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+    file.size = len(data)
+    file.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(file)
     return file
 
 
 def rename_file(db: Session, file: FileItem, new_name: str) -> FileItem:
-    file.name = Path(new_name).name
-    db.commit()
-    db.refresh(file)
+    cleaned = new_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if cleaned:
+        file.name = cleaned
+        db.commit()
+        db.refresh(file)
     return file
 
 

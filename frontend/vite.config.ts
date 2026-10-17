@@ -15,4 +15,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("yet-another-react-lightbox")) return "lightbox";
+          if (id.includes("@codemirror") || id.includes("@uiw")) return "editor";
+          if (id.includes("@lezer")) return "editor";
+          if (id.includes("react-router")) return "router";
+          if (id.includes("react")) return "react";
+          return "vendor";
+        },
+      },
+    },
+  },
 });

@@ -16,7 +16,12 @@ router = APIRouter(
 
 @router.get("", response_model=list[GroupOut])
 def list_groups(db: Session = Depends(get_db)):
-    groups = db.query(Group).order_by(Group.created_at.desc()).all()
+    groups = (
+        db.query(Group)
+        .filter(Group.is_system.is_(False))
+        .order_by(Group.created_at.desc())
+        .all()
+    )
     return [to_group_out(g) for g in groups]
 
 

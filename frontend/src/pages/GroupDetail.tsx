@@ -1,8 +1,16 @@
-import { ArrowLeft, Loader2, QrCode, Settings2, Snowflake } from "lucide-react";
+import {
+  ArrowLeft,
+  HardDrive,
+  Loader2,
+  QrCode,
+  Settings2,
+  Snowflake,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { adminApi, urls, type Group } from "../api";
+import { adminApi, shareLink, urls, type Group } from "../api";
+import { panelPath } from "../base";
 import { FileBrowser, type BrowserAdapter } from "../components/FileBrowser";
 import { Modal } from "../components/Modal";
 import { ShareDialog } from "../components/ShareDialog";
@@ -57,6 +65,9 @@ export function GroupDetail() {
         await adminApi.uploadFiles(groupId, files);
         void load();
       },
+      getShare: (f) => adminApi.getFileShare(f.id),
+      createShare: (f, allowEdit) => adminApi.createFileShare(f.id, allowEdit),
+      revokeShare: (f) => adminApi.deleteFileShare(f.id),
     }),
     [groupId, load]
   );
@@ -82,7 +93,7 @@ export function GroupDetail() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-slate-400">
+      <div className="flex h-64 items-center justify-center text-app-muted">
         <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
@@ -90,9 +101,9 @@ export function GroupDetail() {
 
   if (!group) {
     return (
-      <div className="card p-8 text-center text-slate-300">
+      <div className="card p-8 text-center text-app-muted">
         <p>{error ?? "分组不存在"}</p>
-        <Link to="/" className="btn-outline mt-4 inline-flex">
+        <Link to={panelPath("/")} className="btn-outline mt-4 inline-flex">
           <ArrowLeft className="h-4 w-4" />
           返回
         </Link>
@@ -103,25 +114,43 @@ export function GroupDetail() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white">
+        <Link
+          to={panelPath("/")}
+          className="inline-flex items-center gap-1.5 text-sm text-app-muted transition hover:text-app-text"
+        >
           <ArrowLeft className="h-4 w-4" />
           分组管理
         </Link>
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
+        <div className="card mt-3 flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <div className="vault-kicker flex items-center gap-2"><Snowflake className="h-3.5 w-3.5" /> Vault unit {String(group.id).padStart(2, "0")}</div>
-            <h1 className="mt-2 truncate text-2xl font-semibold tracking-wide text-ice-100">{group.name}</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              {group.description || "无描述"}
+            <div className="vault-kicker flex items-center gap-2">
+              <Snowflake className="h-3.5 w-3.5" />
+              Vault unit {String(group.id).padStart(2, "0")}
+            </div>
+            <h1 className="mt-2 truncate text-2xl font-semibold tracking-wide text-app-text">
+              {group.name}
+            </h1>
+            <p className="mt-1 text-sm text-app-muted">
+              {group.description || "暂无描述"}
             </p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-              <span>{group.file_count} 个文件</span>
-              <span>{formatBytes(group.total_size)}</span>
-              <span>{group.allow_edit ? "分享可编辑" : "分享只读"}</span>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="chip">{group.file_count} 个文件</span>
+              <span className="chip">
+                <HardDrive className="h-3.5 w-3.5" />
+                {formatBytes(group.total_size)}
+              </span>
+              <span className={group.allow_edit ? "chip chip-accent" : "chip"}>
+                {group.allow_edit ? "分享可编辑" : "分享只读"}
+              </span>
             </div>
           </div>
+
           <div className="flex shrink-0 gap-2">
-            <button className="btn-outline" onClick={() => setSettingsOpen(true)}>
+            <button
+              className="btn-outline"
+              onClick={() => setSettingsOpen(true)}
+            >
               <Settings2 className="h-4 w-4" />
               设置
             </button>
@@ -134,18 +163,22 @@ export function GroupDetail() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-2.5 text-sm text-app-danger">
           {error}
         </div>
       )}
 
-      <FileBrowser adapter={adapter} emptyHint="拖拽文件到此处，或点击右上角「上传」" />
+      <FileBrowser
+        adapter={adapter}
+        emptyHint="拖拽文件到此处，或点击右上角「上传」"
+      />
 
       <ShareDialog
         open={shareOpen}
         onClose={() => setShareOpen(false)}
-        token={group.share_token}
-        groupName={group.name}
+        link={shareLink(group.share_token)}
+        name={group.name}
+        hint="扫码或打开链接即可浏览该分组文件，无需登录。"
       />
 
       <Modal
@@ -153,12 +186,20 @@ export function GroupDetail() {
         onClose={() => setSettingsOpen(false)}
         size="sm"
         title="分组设置"
+        subtitle={group.name}
         footer={
           <>
-            <button className="btn-outline" onClick={() => setSettingsOpen(false)}>
+            <button
+              className="btn-outline"
+              onClick={() => setSettingsOpen(false)}
+            >
               取消
             </button>
-            <button className="btn-primary" onClick={saveSettings} disabled={saving || !name.trim()}>
+            <button
+              className="btn-primary"
+              onClick={saveSettings}
+              disabled={saving || !name.trim()}
+            >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               保存
             </button>
@@ -167,30 +208,34 @@ export function GroupDetail() {
       >
         <div className="space-y-4">
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">名称</span>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+            <span className="text-xs font-medium text-app-muted">名称</span>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-slate-400">描述</span>
+            <span className="text-xs font-medium text-app-muted">描述</span>
             <textarea
               className="input min-h-[72px] resize-y"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
           </label>
-          <label className="flex items-center gap-2.5 text-sm text-slate-300">
+          <label className="flex items-center gap-2.5 text-sm text-app-text">
             <input
               type="checkbox"
-              className="h-4 w-4 accent-frost-500"
+              className="h-4 w-4 accent-[var(--accent)]"
               checked={allowEdit}
               onChange={(e) => setAllowEdit(e.target.checked)}
             />
             允许通过分享链接编辑文本文件
           </label>
-          <label className="flex items-center gap-2.5 text-sm text-slate-300">
+          <label className="flex items-center gap-2.5 text-sm text-app-text">
             <input
               type="checkbox"
-              className="h-4 w-4 accent-frost-500"
+              className="h-4 w-4 accent-[var(--accent)]"
               checked={regenerate}
               onChange={(e) => setRegenerate(e.target.checked)}
             />

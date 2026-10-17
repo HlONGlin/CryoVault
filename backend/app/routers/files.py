@@ -6,7 +6,14 @@ from .. import operations
 from ..database import get_db
 from ..deps import require_admin
 from ..responses import serve_file
-from ..schemas import TextContent, TextUpdate, to_file_out
+from ..schemas import (
+    FileShareCreate,
+    FileShareOut,
+    TextContent,
+    TextUpdate,
+    to_file_out,
+    to_file_share_out,
+)
 
 router = APIRouter(
     prefix="/api/files",
@@ -72,3 +79,25 @@ def update_content(file_id: int, payload: TextUpdate, db: Session = Depends(get_
     file = operations.get_file_or_404(db, file_id)
     file = operations.write_text(db, file, payload.content)
     return TextContent(name=file.name, content=payload.content, updated_at=file.updated_at)
+
+
+@router.get("/{file_id}/share", response_model=FileShareOut | None)
+def get_file_share(file_id: int, db: Session = Depends(get_db)):
+    file = operations.get_file_or_404(db, file_id)
+    share = operations.get_file_share(db, file)
+    return to_file_share_out(share) if share else None
+
+
+@router.post("/{file_id}/share", response_model=FileShareOut)
+def create_file_share(
+    file_id: int, payload: FileShareCreate, db: Session = Depends(get_db)
+):
+    file = operations.get_file_or_404(db, file_id)
+    share = operations.ensure_file_share(db, file, payload.allow_edit)
+    return to_file_share_out(share)
+
+
+@router.delete("/{file_id}/share", status_code=status.HTTP_204_NO_CONTENT)
+def delete_file_share(file_id: int, db: Session = Depends(get_db)):
+    file = operations.get_file_or_404(db, file_id)
+    operations.revoke_file_share(db, file)

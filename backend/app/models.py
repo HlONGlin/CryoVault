@@ -8,7 +8,7 @@ from .database import Base
 
 
 def gen_token() -> str:
-    return secrets.token_urlsafe(9)
+    return secrets.token_urlsafe(16)
 
 
 class Group(Base):
@@ -21,6 +21,7 @@ class Group(Base):
         String(32), unique=True, index=True, default=gen_token
     )
     allow_edit: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
@@ -51,3 +52,26 @@ class FileItem(Base):
     )
 
     group: Mapped[Group] = relationship(back_populates="files")
+    share: Mapped["FileShare"] = relationship(
+        back_populates="file",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class FileShare(Base):
+    __tablename__ = "file_shares"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    file_id: Mapped[int] = mapped_column(
+        ForeignKey("files.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    share_token: Mapped[str] = mapped_column(
+        String(32), unique=True, index=True, default=gen_token
+    )
+    allow_edit: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
+
+    file: Mapped[FileItem] = relationship(back_populates="share")
