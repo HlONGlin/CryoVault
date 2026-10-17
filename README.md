@@ -25,16 +25,28 @@ CryoVault 是一个面向 Linux 自托管场景的轻量网盘，支持本地文
 ## Linux 快速启动
 
 ```bash
-cp backend/.env.example backend/.env
-# 编辑 backend/.env，至少设置一个管理 token
 chmod +x start.sh
 ./start.sh
 ```
 
-启动后访问：
+首次运行会自动生成管理员令牌和随机访问路径，写入 `backend/.env`，构建前端后启动服务。终端会打印完整管理地址，形如：
 
-- 管理端：`http://localhost:5173`
-- API 文档：`http://localhost:8000/docs`
+```text
+管理地址：http://192.168.1.20:8000/panel/8d9cf22f5a339f989e3fac6d5bca4f67
+管理员令牌：c4b8c77dbe95a7e4950db620602fa15c
+```
+
+直接访问根路径 `/` 会返回 404，必须使用带随机后缀的完整地址。
+
+其他用法：
+
+```bash
+./start.sh 9000          # 指定端口
+./start.sh --print-url   # 只打印当前管理地址和令牌
+./start.sh --dev         # 前端开发模式（Vite 5173，不使用随机路径）
+```
+
+API 文档默认关闭；如需临时开启，在 `backend/.env` 中设置 `CRYOVAULT_DOCS_ENABLED=true`。
 
 ## 一键安装与管理
 
@@ -118,6 +130,20 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 如果 `frontend/dist` 存在，FastAPI 会自动托管构建后的前端。生产环境建议通过 Nginx 或 Caddy 配置 HTTPS，将 `CRYOVAULT_ADMIN_TOKEN` 设置为随机长 token，并设置随机 `CRYOVAULT_PANEL_PATH`（例如 `/panel/$(openssl rand -hex 16)`）。
+
+## 常见问题
+
+### 管理地址端口后面没有随机后缀
+
+按顺序排查：
+
+1. 确认用的是最新代码。一键脚本安装的服务器请重新运行脚本并选择「1. 安装或更新 CryoVault」；源码部署请 `git pull` 后重新执行 `./start.sh`。
+2. 执行 `./start.sh --print-url` 直接查看当前地址和令牌。
+3. 检查 `backend/.env`：`CRYOVAULT_PANEL_PATH` 应形如 `/panel/8d9cf22f...`。为空、`/panel/` 或格式非法时，启动脚本会自动重新生成。
+4. 如果之前用旧版本构建过前端，旧的 `frontend/dist/index.html` 不含路径占位符，会导致前缀丢失。`./start.sh` 每次启动都会重新构建前端。
+5. `./start.sh --dev` 是前端开发模式，不启用随机路径，这是正常行为。
+
+访问 `http://服务器IP:8000/` 返回 404 也是预期行为，必须使用带随机后缀的完整地址。
 
 ## 配置
 

@@ -160,6 +160,12 @@ ensure_node() {
     [ "$node_major" -ge 18 ] 2>/dev/null || die "需要 Node.js 18 或更高版本，当前为 $(node --version)。"
 }
 
+app_group_name() {
+    group="$(id -gn "$APP_USER" 2>/dev/null | head -n 1 || true)"
+    [ -n "$group" ] || group="$APP_USER"
+    printf '%s' "$group"
+}
+
 ensure_app_user() {
     if ! id "$APP_USER" >/dev/null 2>&1; then
         nologin_shell="/usr/sbin/nologin"
@@ -175,8 +181,7 @@ ensure_app_user() {
         fi
     fi
 
-    APP_GROUP="$(id -gn "$APP_USER" 2>/dev/null || true)"
-    [ -n "$APP_GROUP" ] || APP_GROUP="$APP_USER"
+    APP_GROUP="$(app_group_name)"
 
     mkdir -p "$DATA_DIR"
     chmod 700 "$DATA_DIR"
@@ -220,12 +225,23 @@ generate_token() {
 }
 
 generate_panel_path() {
-    printf '/panel/%s' "$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    random=""
+    if command -v od >/dev/null 2>&1; then
+        random="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    elif command -v openssl >/dev/null 2>&1; then
+        random="$(openssl rand -hex 16)"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        random="$(printf '%s%s' "$(date +%s%N)" "$$" | sha256sum | cut -c1-32)"
+    fi
+    [ -n "$random" ] || die "无法生成随机访问路径：缺少 od、openssl 或 sha256sum。"
+    printf '/panel/%s' "$random"
 }
 
 ensure_panel_path() {
     panel_path="$(read_env_value CRYOVAULT_PANEL_PATH "$ENV_FILE")"
-    if [ -n "$panel_path" ]; then
+    # Reuse an existing value only when it looks like a real secret path.
+    if [ "${#panel_path}" -ge 10 ] \
+        && [[ "$panel_path" =~ ^/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]]; then
         printf '%s' "$panel_path"
         return
     fi
@@ -296,14 +312,14 @@ EOF
     if [ -n "$extra" ]; then
         printf '%s\n' "$extra" >> "$env_tmp"
     fi
-    chown "$APP_USER:$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")" "$env_tmp"
+    chown "$APP_USER:$(app_group_name)" "$env_tmp"
     chmod 600 "$env_tmp"
     mv -f "$env_tmp" "$ENV_FILE"
 }
 
 write_service() {
     port="$1"
-    app_group="$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")"
+    app_group="$(app_group_name)"
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=CryoVault self-hosted file vault
@@ -411,12 +427,19 @@ install_manager() {
         rm -rf "$INSTALL_DIR"
         [ -d "$old_install" ] && mv "$old_install" "$INSTALL_DIR"
         [ -f "$old_env" ] && cp "$old_env" "$ENV_FILE"
-        chown "$APP_USER:$(id -gn "$APP_USER" 2>/dev/null || printf '%s' "$APP_USER")" "$ENV_FILE" 2>/dev/null || true
+        chown "$APP_USER:$(app_group_name)" "$ENV_FILE" 2>/dev/null || true
         systemctl daemon-reload
         systemctl restart "$SERVICE_NAME" 2>/dev/null || true
         die "CryoVault 启动失败，请查看：journalctl -u $SERVICE_NAME -n 100 --no-pager"
     fi
     systemctl is-active --quiet "$SERVICE_NAME" || die "CryoVault 未正常运行。"
+
+    if command -v curl >/dev/null 2>&1; then
+        code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$panel_path/" || true)"
+        if [ "$code" != "200" ]; then
+            warn "管理地址自检返回 $code。请确认安装的是最新版本，或执行 journalctl -u $SERVICE_NAME -n 50 --no-pager 查看日志。"
+        fi
+    fi
 
     rm -rf "$old_install"
     rm -rf "$build_root"

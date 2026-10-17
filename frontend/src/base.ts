@@ -4,11 +4,17 @@ declare global {
   }
 }
 
+const PANEL_SEGMENT = /^(\/panel\/[0-9A-Za-z._-]+)/;
+
 function readBase(): string {
   const raw = window.__CRYOVAULT_BASE__;
-  if (!raw || !raw.startsWith("/")) return "";
-  if (raw.includes("__CRYOVAULT_PANEL_BASE__")) return "";
-  return raw.replace(/\/+$/, "");
+  if (raw && raw.startsWith("/") && !raw.includes("__CRYOVAULT_PANEL_BASE__")) {
+    return raw.replace(/\/+$/, "");
+  }
+  // Fallback for a stale build or when the page is served outside the backend
+  // template: infer the secret prefix from the current URL.
+  const match = window.location.pathname.match(PANEL_SEGMENT);
+  return match ? match[1] : "";
 }
 
 /** Secret path prefix of the admin console, e.g. "/panel/9f3c…". */
