@@ -1,14 +1,11 @@
 import {
-  Files,
-  LayoutGrid,
   LockKeyhole,
   Moon,
   ShieldCheck,
-  Snowflake,
   Sun,
 } from "lucide-react";
 import { type ReactNode } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth";
 import { panelPath } from "../base";
@@ -28,98 +25,69 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   const brand = (
-    <>
-      <span className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-app-border-strong bg-app-panel2 text-app-accent shadow-frost transition group-hover:border-app-accent">
-        <Snowflake className="h-5 w-5" />
-        <span className="absolute -right-1 -top-1 h-2 w-2 animate-soft-pulse rounded-full bg-app-accent shadow-[0_0_10px_var(--accent)]" />
-      </span>
-      <span className="flex flex-col leading-none">
-        <span className="text-sm font-semibold tracking-[0.08em] text-app-text">
-          CryoVault
+    <div className="flex items-center gap-3">
+      <div className="flex flex-col">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-bold tracking-tight text-app-text">
+            CryoVault
+          </span>
+          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/60 dark:text-blue-300 dark:ring-blue-400/30">
+            云盘
+          </span>
+        </div>
+        <span className="text-[11px] font-normal text-app-faint">
+          私有数据封存与分发
         </span>
-        <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-app-faint">
-          Cryogenic data vault
-        </span>
-      </span>
-    </>
+      </div>
+    </div>
   );
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-40 border-b border-app-border bg-app-panel backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+    <div className="flex min-h-full flex-col bg-app-bg text-app-text">
+      <header className="sticky top-0 z-40 border-b border-app-border bg-app-panel/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           {isPublic ? (
-            <span className="flex items-center gap-2.5">{brand}</span>
+            <div className="flex items-center gap-3">{brand}</div>
           ) : (
             <Link
               to={panelPath(unlocked ? "/" : "/login")}
-              className="group flex items-center gap-2.5"
+              className="group flex items-center gap-3"
             >
               {brand}
             </Link>
           )}
 
-          {unlocked && !isPublic && (
-            <nav className="hidden items-center gap-1 md:flex">
-              <NavLink
-                to={panelPath("/")}
-                end
-                className={({ isActive }) =>
-                  `nav-link ${isActive ? "nav-link-active" : ""}`
-                }
-              >
-                <LayoutGrid className="h-4 w-4" />
-                分组
-              </NavLink>
-              <NavLink
-                to={panelPath("/direct")}
-                className={({ isActive }) =>
-                  `nav-link ${isActive ? "nav-link-active" : ""}`
-                }
-              >
-                <Files className="h-4 w-4" />
-                单文件
-              </NavLink>
-            </nav>
-          )}
-
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
-              className="btn-ghost px-2.5"
+              className="btn-ghost rounded-xl p-2.5 text-app-muted hover:text-app-text"
               onClick={toggle}
-              title={theme === "dark" ? "切换到白天模式" : "切换到夜间模式"}
-              aria-label={theme === "dark" ? "切换到白天模式" : "切换到夜间模式"}
+              title={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
+              aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
             >
               {theme === "dark" ? (
-                <Moon className="h-[18px] w-[18px]" />
+                <Moon className="h-4 w-4" />
               ) : (
-                <Sun className="h-[18px] w-[18px]" />
+                <Sun className="h-4 w-4 text-amber-500" />
               )}
-              <span className="hidden sm:inline">
-                {theme === "dark" ? "夜间" : "白天"}
-              </span>
             </button>
-
-            {!isPublic && unlocked && (
-              <Link
-                to={panelPath("/direct")}
-                className="btn-ghost px-2.5 md:hidden"
-                title="单文件分享"
-              >
-                <Files className="h-[18px] w-[18px]" />
-              </Link>
-            )}
 
             {!isPublic &&
               (unlocked ? (
-                <button className="btn-outline" onClick={handleLock}>
-                  <LockKeyhole className="h-4 w-4" />
-                  <span className="hidden sm:inline">锁定</span>
+                <button
+                  className="btn-outline flex items-center gap-1.5 px-3 py-1.5 text-xs text-app-muted hover:text-app-text"
+                  onClick={handleLock}
+                  title="锁定当前会话"
+                >
+                  <LockKeyhole className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">锁定管理</span>
                 </button>
               ) : (
-                <Link to={panelPath("/login")} className="btn-outline">
-                  <ShieldCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">解锁</span>
+                <Link
+                  to={panelPath("/login")}
+                  className="btn-primary flex items-center gap-1.5 px-3.5 py-1.5 text-xs"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>管理解锁</span>
                 </Link>
               ))}
           </div>
@@ -130,13 +98,27 @@ export function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      <footer className="border-t border-app-border py-4 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-app-faint">
-        CryoVault · cold storage protocol · local vault
-        {authRequired && !isPublic && (
-          <span className="ml-2 normal-case tracking-normal">
-            · 管理端需要令牌解锁
-          </span>
-        )}
+      <footer className="border-t border-app-border py-5 text-center text-xs text-app-faint">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 sm:flex-row sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-app-muted">CryoVault</span>
+            <span>·</span>
+            <span>Cloudreve 风格现代化云存储</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span>本地加密存储</span>
+            <span>·</span>
+            <span>极速传输</span>
+            {authRequired && !isPublic && (
+              <>
+                <span>·</span>
+                <span className="rounded bg-app-panel2 px-1.5 py-0.5 text-app-muted">
+                  受令牌保护
+                </span>
+              </>
+            )}
+          </div>
+        </div>
       </footer>
     </div>
   );

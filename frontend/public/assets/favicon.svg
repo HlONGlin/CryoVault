@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>CryoVault</title>
+  <rect width="64" height="64" rx="16" fill="#0b1322"/>
+  <path d="M32 12v40M14.7 22l34.6 20M14.7 42l34.6-20M22 14.7l20 34.6M42 14.7 22 49.3" stroke="#7de3f4" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="6" fill="#0b1322" stroke="#7de3f4" stroke-width="3"/>
+</svg>

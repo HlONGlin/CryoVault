@@ -1,6 +1,6 @@
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
-import { Loader2, Save } from "lucide-react";
+import { FileCode2, Loader2, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { FileItem, TextContent } from "../api";
@@ -80,11 +80,32 @@ export function TextEditorModal({
       onClose={onClose}
       size="xl"
       padded={false}
-      title={file?.name}
+      title={
+        <div className="flex items-center gap-2">
+          <FileCode2 className="h-4 w-4 text-blue-500" />
+          <span className="truncate">{file?.name}</span>
+        </div>
+      }
       subtitle={
-        file
-          ? `${languageFor(file.name)} · ${readOnly ? "只读" : dirty ? "未保存" : "已同步"}`
-          : undefined
+        file ? (
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="font-mono uppercase text-app-muted">
+              {languageFor(file.name)}
+            </span>
+            <span>·</span>
+            <span
+              className={
+                readOnly
+                  ? "text-app-faint"
+                  : dirty
+                  ? "text-amber-500 font-medium"
+                  : "text-emerald-600 dark:text-emerald-400 font-medium"
+              }
+            >
+              {readOnly ? "只读浏览" : dirty ? "未保存" : "已同步"}
+            </span>
+          </div>
+        ) : undefined
       }
       footer={
         <>
@@ -92,38 +113,39 @@ export function TextEditorModal({
             <span className="mr-auto text-xs text-app-danger">{error}</span>
           )}
           {savedAt && !error && (
-            <span className="mr-auto text-xs text-emerald-600 dark:text-emerald-300">
-              已保存 {savedAt}
+            <span className="mr-auto text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              ✓ 已于 {savedAt} 保存
             </span>
           )}
-          <button className="btn-outline" onClick={onClose}>
+          <button className="btn-outline text-xs" onClick={onClose}>
             关闭
           </button>
           {editable && (
             <button
-              className="btn-primary"
+              className="btn-primary text-xs font-semibold"
               onClick={handleSave}
               disabled={saving || !dirty}
             >
               {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Save className="h-4 w-4" />
+                <Save className="h-3.5 w-3.5" />
               )}
-              保存
+              <span>保存修改</span>
             </button>
           )}
         </>
       }
     >
       {loading ? (
-        <div className="flex h-64 items-center justify-center text-app-muted">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex h-64 flex-col items-center justify-center gap-2.5 text-app-muted">
+          <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
+          <span className="text-xs text-app-faint">正在加载文件内容...</span>
         </div>
       ) : (
         <CodeMirror
           value={content}
-          height="60vh"
+          height="62vh"
           theme={theme === "dark" ? oneDark : "light"}
           editable={editable}
           extensions={extensions}
@@ -134,7 +156,7 @@ export function TextEditorModal({
             foldGutter: true,
             autocompletion: true,
           }}
-          className="text-sm"
+          className="text-xs sm:text-sm"
         />
       )}
     </Modal>

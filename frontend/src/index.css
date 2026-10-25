@@ -4,53 +4,53 @@
 
 :root,
 [data-theme="dark"] {
-  --bg: #06111b;
-  --grid: rgba(125, 227, 244, 0.05);
-  --overlay: rgba(3, 10, 16, 0.72);
-  --panel: rgba(11, 27, 40, 0.82);
-  --panel-solid: #0b1b28;
-  --panel-2: rgba(255, 255, 255, 0.045);
-  --panel-3: rgba(255, 255, 255, 0.08);
-  --border: rgba(125, 227, 244, 0.14);
-  --border-strong: rgba(125, 227, 244, 0.34);
-  --text: #e8f6fb;
-  --muted: #93adbf;
-  --faint: #6a8497;
-  --accent: #7de3f4;
-  --accent-strong: #42c9e6;
-  --accent-contrast: #04121a;
-  --accent-soft: rgba(66, 201, 230, 0.14);
-  --glow: rgba(66, 201, 230, 0.38);
-  --danger: #fda4af;
-  --danger-bg: rgba(244, 63, 94, 0.12);
-  --danger-border: rgba(244, 63, 94, 0.32);
-  --shadow: 0 20px 44px -30px rgba(0, 0, 0, 0.95);
+  --bg: #0b1322;
+  --overlay: rgba(5, 10, 20, 0.72);
+  --panel: #131d31;
+  --panel-solid: #131d31;
+  --panel-2: #1b2842;
+  --panel-3: #233454;
+  --border: rgba(148, 163, 184, 0.12);
+  --border-strong: rgba(148, 163, 184, 0.26);
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --accent: #3b82f6;
+  --accent-strong: #60a5fa;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(59, 130, 246, 0.14);
+  --glow: rgba(59, 130, 246, 0.22);
+  --danger: #f87171;
+  --danger-bg: rgba(239, 68, 68, 0.14);
+  --danger-border: rgba(239, 68, 68, 0.28);
+  --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 4px 16px -4px rgba(0, 0, 0, 0.45);
   --qr-plate: #ffffff;
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --bg: #edf6fa;
-  --grid: rgba(13, 127, 156, 0.07);
-  --overlay: rgba(233, 244, 249, 0.72);
-  --panel: rgba(255, 255, 255, 0.88);
+  --bg: #f8fafc;
+  --overlay: rgba(15, 23, 42, 0.48);
+  --panel: #ffffff;
   --panel-solid: #ffffff;
-  --panel-2: rgba(9, 45, 66, 0.045);
-  --panel-3: rgba(9, 45, 66, 0.08);
-  --border: rgba(16, 84, 110, 0.15);
-  --border-strong: rgba(16, 84, 110, 0.36);
-  --text: #0a2433;
-  --muted: #47697c;
-  --faint: #7290a1;
-  --accent: #0b7f9e;
-  --accent-strong: #096b85;
+  --panel-2: #f1f5f9;
+  --panel-3: #e2e8f0;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --muted: #475569;
+  --faint: #94a3b8;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
   --accent-contrast: #ffffff;
-  --accent-soft: rgba(11, 127, 158, 0.1);
-  --glow: rgba(11, 127, 158, 0.22);
-  --danger: #be123c;
-  --danger-bg: rgba(225, 29, 72, 0.08);
-  --danger-border: rgba(225, 29, 72, 0.24);
-  --shadow: 0 20px 44px -32px rgba(10, 36, 51, 0.4);
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --glow: rgba(37, 99, 235, 0.14);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.08);
+  --danger-border: rgba(239, 68, 68, 0.22);
+  --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 2px 10px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
   --qr-plate: #ffffff;
   color-scheme: light;
 }
@@ -66,19 +66,17 @@ body {
   color: var(--text);
   background-color: var(--bg);
   background-image:
-    radial-gradient(1100px 560px at 12% -10%, var(--glow), transparent 60%),
-    radial-gradient(900px 520px at 100% 0%, var(--accent-soft), transparent 55%),
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: auto, auto, 44px 44px, 44px 44px;
+    radial-gradient(1000px 500px at 50% -80px, var(--glow), transparent 75%),
+    radial-gradient(700px 400px at 100% 0%, var(--accent-soft), transparent 65%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 ::selection {
   background: var(--accent-soft);
-  color: var(--text);
+  color: var(--accent);
 }
 
 * {
@@ -87,8 +85,12 @@ body {
 }
 
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
@@ -112,12 +114,13 @@ body {
     border: 1px solid var(--border);
     background: var(--panel);
     backdrop-filter: blur(16px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
   .card {
-    @apply glass rounded-2xl;
-    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-card);
   }
 
   .glass,
@@ -127,39 +130,42 @@ body {
   .chip,
   .badge,
   .nav-link {
-    transition: background-color 0.2s ease, border-color 0.2s ease,
-      color 0.2s ease, box-shadow 0.2s ease;
+    transition: background-color 0.18s ease, border-color 0.18s ease,
+      color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   }
 
   .card-hover {
-    transition: transform 0.18s ease, box-shadow 0.18s ease,
-      border-color 0.18s ease;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.2s ease;
   }
 
   .card-hover:hover {
     transform: translateY(-2px);
     border-color: var(--border-strong);
-    box-shadow: 0 24px 48px -30px var(--glow);
+    box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--border-strong);
+  }
+
+  [data-theme="dark"] .card-hover:hover {
+    box-shadow: 0 14px 32px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-strong);
   }
 
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium
-      transition disabled:cursor-not-allowed disabled:opacity-50;
+      transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-primary {
     @apply btn;
     color: var(--accent-contrast);
-    background: linear-gradient(
-      135deg,
-      var(--accent) 0%,
-      var(--accent-strong) 100%
-    );
-    box-shadow: 0 12px 28px -16px var(--glow);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+    box-shadow: 0 4px 14px -3px var(--glow);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
   .btn-primary:hover:not(:disabled) {
-    filter: brightness(1.07);
+    filter: brightness(1.06);
+    box-shadow: 0 6px 20px -3px var(--glow);
   }
 
   .btn-ghost {
@@ -168,7 +174,7 @@ body {
   }
 
   .btn-ghost:hover:not(:disabled) {
-    background: var(--panel-3);
+    background: var(--panel-2);
     color: var(--text);
   }
 
@@ -176,12 +182,12 @@ body {
     @apply btn;
     color: var(--text);
     border: 1px solid var(--border);
-    background: var(--panel-2);
+    background: var(--panel);
   }
 
   .btn-outline:hover:not(:disabled) {
     border-color: var(--border-strong);
-    background: var(--panel-3);
+    background: var(--panel-2);
   }
 
   .btn-danger {
@@ -207,11 +213,12 @@ body {
 
   .input:focus {
     border-color: var(--accent);
+    background: var(--panel);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium;
     color: var(--muted);
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -224,40 +231,38 @@ body {
   }
 
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
     color: var(--muted);
     background: var(--panel-2);
     border: 1px solid var(--border);
   }
 
   .vault-kicker {
-    @apply font-mono text-[10px] uppercase tracking-[0.24em];
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em];
     color: var(--accent);
   }
 
-  .vault-line {
-    @apply h-px w-full;
-    background: linear-gradient(
-      90deg,
-      var(--border-strong),
-      var(--border),
-      transparent
-    );
-  }
-
   .nav-link {
-    @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition;
+    @apply inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition;
     color: var(--muted);
   }
 
   .nav-link:hover {
     color: var(--text);
-    background: var(--panel-3);
+    background: var(--panel-2);
   }
 
   .nav-link-active {
     color: var(--accent);
     background: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--border-strong);
+    font-weight: 600;
+  }
+
+  /* Cloudreve style view toggle pills */
+  .view-toggle-btn {
+    @apply p-1.5 rounded-lg transition text-app-muted hover:text-app-text;
+  }
+  .view-toggle-btn.active {
+    @apply bg-app-panel text-app-accent shadow-sm;
   }
 }

@@ -93,17 +93,18 @@ export function FileShareDialog({
       open={file !== null}
       onClose={onClose}
       size="sm"
-      title="单文件分享"
+      title="单文件分享直链"
       subtitle={file?.name}
       footer={
-        <button className="btn-outline" onClick={onClose}>
+        <button className="btn-outline text-xs" onClick={onClose}>
           关闭
         </button>
       }
     >
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-app-muted">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <div className="flex h-52 flex-col items-center justify-center gap-2.5 text-app-muted">
+          <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
+          <span className="text-xs text-app-faint">正在查询分享状态...</span>
         </div>
       ) : share ? (
         <div className="space-y-4">
@@ -112,57 +113,84 @@ export function FileShareDialog({
             name={file?.name ?? "file"}
             hint={
               share.allow_edit
-                ? "扫码后可查看并编辑该文本文件，其他类型文件可直接预览或下载。"
-                : "扫码后可预览或下载该文件，无需登录。"
+                ? "扫码后可在线查看并编辑文本文件，其他类型可免登录直接下载。"
+                : "扫码后可在任意终端免登录高速预览或下载该文件。"
             }
           />
-          <div className="flex flex-wrap items-center gap-2 border-t border-app-border pt-4">
-            <span className="mr-auto text-xs text-app-muted">
-              {share.allow_edit ? "当前允许编辑文本" : "当前为只读分享"}
-            </span>
-            <button className="btn-outline" onClick={toggleEdit} disabled={busy}>
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border/80 pt-4">
+            <span className="text-xs font-medium text-app-muted">
+              {share.allow_edit ? (
+                <span className="text-blue-600 dark:text-blue-400">
+                  当前支持在线编辑
+                </span>
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                "当前为只读分享"
               )}
-              {share.allow_edit ? "改为只读" : "允许编辑"}
-            </button>
-            {revokeShare && (
-              <button className="btn-danger" onClick={revoke} disabled={busy}>
-                <Trash2 className="h-4 w-4" />
-                撤销链接
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                className="btn-outline text-xs"
+                onClick={toggleEdit}
+                disabled={busy}
+              >
+                {busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                <span>{share.allow_edit ? "设为只读" : "开启编辑"}</span>
               </button>
-            )}
+              {revokeShare && (
+                <button
+                  className="btn-danger text-xs"
+                  onClick={revoke}
+                  disabled={busy}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>撤销链接</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-app-border bg-app-panel2 p-4 text-sm text-app-muted">
-            为这个文件单独生成下载链接和二维码，不需要创建分组。
+          <div className="rounded-xl border border-app-border bg-app-panel2/60 p-4 text-xs leading-relaxed text-app-muted">
+            为该文件单独生成免登录的下载直链与高清二维码，无需预先创建分组，即传即享。
           </div>
-          <label className="flex items-center gap-2.5 text-sm text-app-text">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[var(--accent)]"
-              checked={allowEdit}
-              onChange={(e) => setAllowEdit(e.target.checked)}
-            />
-            允许通过链接编辑文本文件
-          </label>
-          <button className="btn-primary w-full" onClick={create} disabled={busy}>
+          <div className="rounded-xl border border-app-border bg-app-panel2/60 p-3">
+            <label className="flex items-center gap-2.5 text-xs text-app-text cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded accent-blue-600"
+                checked={allowEdit}
+                onChange={(e) => setAllowEdit(e.target.checked)}
+              />
+              <div>
+                <span className="font-semibold">允许访客在线编辑内容</span>
+                <p className="text-[11px] text-app-muted">
+                  仅针对 txt、md、json、py 等文本/代码文件有效
+                </p>
+              </div>
+            </label>
+          </div>
+          <button
+            className="btn-primary w-full py-2.5 text-xs font-semibold"
+            onClick={create}
+            disabled={busy}
+          >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Link2 className="h-4 w-4" />
             )}
-            生成下载链接与二维码
+            <span>生成专属直链与二维码</span>
           </button>
         </div>
       )}
 
       {error && (
-        <div className="mt-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 py-2.5 text-sm text-app-danger">
+        <div className="mt-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3.5 py-2.5 text-xs text-app-danger">
           {error}
         </div>
       )}

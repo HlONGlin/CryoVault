@@ -1,13 +1,13 @@
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
-import { Download, Loader2, Save, Snowflake } from "lucide-react";
+import { Download, Loader2, Save, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { fileShareApi, urls, type PublicFileShare } from "../api";
-import { FileIcon } from "../components/FileIcon";
+import { FileIcon, getFileVisuals } from "../components/FileIcon";
 import { extensionsFor } from "../lib/codemirror";
-import { formatBytes, formatDate, kindMeta } from "../lib/format";
+import { formatBytes, formatDate } from "../lib/format";
 import { useTheme } from "../theme";
 
 export function PublicFile() {
@@ -78,7 +78,7 @@ export function PublicFile() {
     try {
       await fileShareApi.saveContent(token, content);
       setOriginal(content);
-      setSaveMessage("已保存");
+      setSaveMessage("已成功保存更改");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -88,8 +88,9 @@ export function PublicFile() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-app-muted">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-app-muted">
+        <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
+        <span className="text-xs text-app-faint">正在获取文件信息...</span>
       </div>
     );
   }
@@ -97,16 +98,18 @@ export function PublicFile() {
   if (!info) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <div className="card p-8">
-          <Snowflake className="mx-auto h-10 w-10 text-app-danger" />
-          <h1 className="mt-4 text-xl font-semibold text-app-text">
-            文件链接不可用
+        <div className="card p-8 shadow-md">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500 ring-1 ring-red-500/20 dark:bg-red-950/40 dark:text-red-400">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <h1 className="mt-4 text-lg font-bold text-app-text">
+            文件分享链接不可用
           </h1>
-          <p className="mt-2 text-sm text-app-muted">
-            {error ?? "该单文件分享可能已被撤销或删除。"}
+          <p className="mt-2 text-xs text-app-muted">
+            {error ?? "该单文件分享已被创建者撤销，或文件已被移除。"}
           </p>
-          <p className="mt-4 text-xs text-app-faint">
-            请联系分享者获取新的链接。
+          <p className="mt-4 text-[11px] text-app-faint">
+            如有需要，请联系分享者重新生成访问直链。
           </p>
         </div>
       </div>
@@ -114,62 +117,73 @@ export function PublicFile() {
   }
 
   const { file, allow_edit } = info;
-  const meta = kindMeta[file.kind];
+  const visuals = getFileVisuals(file);
 
   return (
-    <div className="space-y-5">
-      <section className="card relative overflow-hidden p-6 sm:p-7">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-[var(--accent-soft)] blur-3xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <div className="vault-kicker flex items-center gap-2">
-              <Snowflake className="h-3.5 w-3.5" />
-              Direct file delivery
+    <div className="space-y-6">
+      {/* Cloudreve Style Public File Hero */}
+      <section className="card relative overflow-hidden bg-app-panel p-5 shadow-sm sm:p-6">
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div
+              className={`flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border shadow-sm ${visuals.bgColor} ${visuals.color} ${visuals.borderColor}`}
+            >
+              <FileIcon file={file} className="h-6 w-6" />
             </div>
-            <h1 className="mt-2 flex items-center gap-2 break-all text-2xl font-semibold tracking-wide text-app-text">
-              <FileIcon
-                file={file}
-                className={`h-6 w-6 shrink-0 ${meta.accent}`}
-              />
-              {file.name}
-            </h1>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="chip">{meta.label}</span>
-              <span className="chip">{formatBytes(file.size)}</span>
-              <span className="chip">{formatDate(file.updated_at)}</span>
-              <span className={allow_edit ? "chip chip-accent" : "chip"}>
-                {allow_edit ? "可编辑文本" : "只读分享"}
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
+                  单文件直连
+                </span>
+                <span className={`badge ${visuals.badgeBg}`}>
+                  {visuals.label}
+                </span>
+              </div>
+              <h1 className="mt-1 break-all text-xl font-bold tracking-tight text-app-text sm:text-2xl">
+                {file.name}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="chip font-mono">{formatBytes(file.size)}</span>
+                <span className="chip">{formatDate(file.updated_at)}</span>
+                <span
+                  className={allow_edit ? "chip chip-accent" : "chip"}
+                >
+                  {allow_edit ? "支持在线编辑" : "只读下载"}
+                </span>
+              </div>
             </div>
           </div>
+
           <a
-            className="btn-primary shrink-0 self-start"
+            className="btn-primary h-10 px-4 text-xs font-semibold shrink-0 self-start sm:self-auto"
             href={urls.fileShareDownload(token)}
             download
           >
             <Download className="h-4 w-4" />
-            下载文件
+            <span>下载文件</span>
           </a>
         </div>
       </section>
 
       {error && (
-        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-2.5 text-sm text-app-danger">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-app-danger">
           {error}
         </div>
       )}
 
+      {/* Preview Section */}
       {file.kind === "text" ? (
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden bg-app-panel shadow-sm">
           {contentLoading ? (
-            <div className="flex h-64 items-center justify-center text-app-muted">
-              <Loader2 className="h-5 w-5 animate-spin" />
+            <div className="flex h-64 flex-col items-center justify-center gap-3 text-app-muted">
+              <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
+              <span className="text-xs text-app-faint">正在加载文件内容...</span>
             </div>
           ) : (
             <>
               <CodeMirror
                 value={content}
-                height="60vh"
+                height="62vh"
                 theme={theme === "dark" ? oneDark : "light"}
                 editable={allow_edit}
                 extensions={extensions}
@@ -180,26 +194,34 @@ export function PublicFile() {
                   foldGutter: true,
                   autocompletion: true,
                 }}
-                className="text-sm"
+                className="text-xs sm:text-sm"
               />
               {allow_edit && (
-                <div className="flex items-center justify-end gap-3 border-t border-app-border px-4 py-3">
-                  {saveMessage && (
-                    <span className="text-xs text-emerald-600 dark:text-emerald-300">
-                      {saveMessage}
-                    </span>
-                  )}
+                <div className="flex items-center justify-between border-t border-app-border bg-app-panel2/50 px-4 py-3">
+                  <span className="text-xs text-app-muted">
+                    {saveMessage ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        {saveMessage}
+                      </span>
+                    ) : content !== original ? (
+                      <span className="text-amber-500 font-medium">
+                        有未保存的改动
+                      </span>
+                    ) : (
+                      "内容已同步"
+                    )}
+                  </span>
                   <button
-                    className="btn-primary"
+                    className="btn-primary text-xs"
                     onClick={save}
                     disabled={saving || content === original}
                   >
                     {saving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Save className="h-4 w-4" />
+                      <Save className="h-3.5 w-3.5" />
                     )}
-                    保存修改
+                    <span>保存修改</span>
                   </button>
                 </div>
               )}
@@ -207,45 +229,65 @@ export function PublicFile() {
           )}
         </div>
       ) : file.kind === "image" ? (
-        <div className="card flex items-center justify-center overflow-hidden p-3">
-          <a href={urls.fileShareRaw(token)} target="_blank" rel="noreferrer">
+        <div className="card flex items-center justify-center overflow-hidden bg-app-panel p-4 shadow-sm">
+          <a
+            href={urls.fileShareRaw(token)}
+            target="_blank"
+            rel="noreferrer"
+            title="点击在新标签页查看原始大图"
+          >
             <img
               src={urls.fileShareRaw(token)}
               alt={file.name}
-              className="max-h-[72vh] max-w-full rounded-xl object-contain"
+              className="max-h-[75vh] max-w-full rounded-xl object-contain shadow-md"
             />
           </a>
         </div>
       ) : file.kind === "video" ? (
-        <div className="card overflow-hidden bg-black/70">
+        <div className="card overflow-hidden bg-black/90 shadow-md">
           <video
             src={urls.fileShareRaw(token)}
             controls
             playsInline
-            className="max-h-[72vh] w-full bg-black"
+            className="max-h-[75vh] w-full bg-black"
           >
-            当前浏览器不支持视频播放。
+            当前浏览器暂不支持在线播放此格式视频。
           </video>
         </div>
       ) : file.kind === "audio" ? (
-        <div className="card p-8">
-          <audio src={urls.fileShareRaw(token)} controls className="w-full" />
+        <div className="card p-8 bg-app-panel shadow-sm">
+          <div className="mx-auto max-w-lg space-y-4 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-500 ring-1 ring-amber-500/20 dark:bg-amber-950/40 dark:text-amber-400">
+              <FileIcon file={file} className="h-8 w-8" />
+            </div>
+            <p className="text-sm font-semibold text-app-text">{file.name}</p>
+            <audio
+              src={urls.fileShareRaw(token)}
+              controls
+              className="w-full"
+            />
+          </div>
         </div>
       ) : (
-        <div className="card flex flex-col items-center gap-4 p-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-app-border bg-app-panel2">
-            <FileIcon file={file} className={`h-7 w-7 ${meta.accent}`} />
+        <div className="card flex flex-col items-center gap-4 p-12 text-center bg-app-panel shadow-sm">
+          <div
+            className={`flex h-16 w-16 items-center justify-center rounded-2xl border shadow-sm ${visuals.bgColor} ${visuals.color} ${visuals.borderColor}`}
+          >
+            <FileIcon file={file} className="h-8 w-8" />
           </div>
-          <p className="text-sm text-app-muted">
-            该类型文件不支持在线预览，请直接下载。
-          </p>
+          <div>
+            <p className="text-base font-semibold text-app-text">{file.name}</p>
+            <p className="mt-1 text-xs text-app-muted">
+              该文件格式暂不支持浏览器在线直接预览，可直接下载至本地查看。
+            </p>
+          </div>
           <a
-            className="btn-outline"
+            className="btn-primary mt-2 text-xs"
             href={urls.fileShareDownload(token)}
             download
           >
             <Download className="h-4 w-4" />
-            下载文件
+            <span>立即下载 ({formatBytes(file.size)})</span>
           </a>
         </div>
       )}

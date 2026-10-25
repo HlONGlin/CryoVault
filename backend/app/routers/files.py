@@ -1,10 +1,17 @@
-from fastapi import APIRouter, Depends, Request, status
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from zipfile import ZIP_DEFLATED, ZipFile
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import operations
+from ..config import settings
 from ..database import get_db
 from ..deps import require_admin
+from ..models import FileItem
 from ..responses import serve_file
 from ..schemas import (
     FileShareCreate,
@@ -24,6 +31,62 @@ router = APIRouter(
 
 class RenamePayload(BaseModel):
     name: str = Field(min_length=1, max_length=512)
+
+
+class ArchivePayload(BaseModel):
+    file_ids: list[int] = Field(min_length=1, max_length=500)
+
+
+@router.post("/archive")
+def download_archive(
+    payload: ArchivePayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    requested_ids = list(dict.fromkeys(payload.file_ids))
+    files = db.query(FileItem).filter(FileItem.id.in_(requested_ids)).all()
+    by_id = {file.id: file for file in files}
+    if len(by_id) != len(requested_ids):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more files not found")
+
+    temp = NamedTemporaryFile(
+        prefix="cryovault-",
+        suffix=".zip",
+        dir=settings.data_dir,
+        delete=False,
+    )
+    archive_path = Path(temp.name)
+    temp.close()
+    try:
+        used_names: set[str] = set()
+        with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
+            for file_id in requested_ids:
+                file = by_id[file_id]
+                source = operations.stored_path(file)
+                if not source.is_file():
+                    raise FileNotFoundError(source)
+                name = file.name or f"file-{file.id}"
+                candidate = name
+                suffix = 2
+                while candidate in used_names:
+                    stem, dot, extension = name.rpartition(".")
+                    candidate = (
+                        f"{stem or name} ({suffix})"
+                        f"{dot}{extension}" if dot else f"{name} ({suffix})"
+                    )
+                    suffix += 1
+                used_names.add(candidate)
+                archive.write(source, arcname=candidate)
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+
+    background_tasks.add_task(archive_path.unlink, missing_ok=True)
+    return FileResponse(
+        archive_path,
+        media_type="application/zip",
+        filename="cryovault-files.zip",
+    )
 
 
 @router.get("/{file_id}")

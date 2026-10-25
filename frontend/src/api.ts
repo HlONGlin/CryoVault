@@ -100,6 +100,59 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+function uploadWithProgress<T>(
+  path: string,
+  files: File[],
+  onProgress?: (percent: number) => void,
+  signal?: AbortSignal
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const form = new FormData();
+    files.forEach((file) => form.append("files", file));
+
+    const abort = () => xhr.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    xhr.open("POST", `/api${path}`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      signal?.removeEventListener("abort", abort);
+      if (xhr.status === 401) {
+        window.dispatchEvent(new Event("cryovault:unauthorized"));
+      }
+      let data: unknown;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch {
+        data = undefined;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T);
+      } else {
+        const detail =
+          typeof (data as { detail?: unknown } | undefined)?.detail === "string"
+            ? (data as { detail: string }).detail
+            : xhr.statusText || "上传失败";
+        reject(new ApiError(xhr.status, detail));
+      }
+    };
+    xhr.onerror = () => {
+      signal?.removeEventListener("abort", abort);
+      reject(new Error("网络连接失败，上传未完成"));
+    };
+    xhr.onabort = () => {
+      signal?.removeEventListener("abort", abort);
+      reject(new DOMException("上传已取消", "AbortError"));
+    };
+    xhr.send(form);
+  });
+}
+
 export const adminApi = {
   authStatus: () => request<{ auth_required: boolean }>("/admin/status"),
   verify: () => request<{ ok: boolean }>("/admin/verify"),
@@ -121,15 +174,41 @@ export const adminApi = {
   deleteGroup: (id: number) => request<void>(`/groups/${id}`, { method: "DELETE" }),
 
   listFiles: (groupId: number) => request<FileItem[]>(`/groups/${groupId}/files`),
-  uploadFiles: (groupId: number, files: File[]) => {
-    const form = new FormData();
-    files.forEach((f) => form.append("files", f));
-    return request<FileItem[]>(`/groups/${groupId}/files`, { method: "POST", body: form });
-  },
+  uploadFiles: (
+    groupId: number,
+    files: File[],
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal
+  ) =>
+    uploadWithProgress<FileItem[]>(
+      `/groups/${groupId}/files`,
+      files,
+      onProgress,
+      signal
+    ),
 
   renameFile: (fileId: number, name: string) =>
     request<FileItem>(`/files/${fileId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   deleteFile: (fileId: number) => request<void>(`/files/${fileId}`, { method: "DELETE" }),
+  downloadArchive: async (fileIds: number[]): Promise<Blob> => {
+    const res = await fetch("/api/files/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ file_ids: fileIds }),
+    });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const data = await res.json();
+        if (typeof data?.detail === "string") detail = data.detail;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, detail);
+    }
+    return res.blob();
+  },
   getContent: (fileId: number) => request<TextContent>(`/files/${fileId}/content`),
   saveContent: (fileId: number, content: string) =>
     request<TextContent>(`/files/${fileId}/content`, {
@@ -154,11 +233,11 @@ export const adminApi = {
     request<void>(`/files/${fileId}/share`, { method: "DELETE" }),
 
   directInfo: () => request<DirectInfo>("/direct"),
-  uploadDirectFiles: (files: File[]) => {
-    const form = new FormData();
-    files.forEach((f) => form.append("files", f));
-    return request<FileItem[]>("/direct/files", { method: "POST", body: form });
-  },
+  uploadDirectFiles: (
+    files: File[],
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal
+  ) => uploadWithProgress<FileItem[]>("/direct/files", files, onProgress, signal),
 };
 
 export const shareApi = {

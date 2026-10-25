@@ -1,4 +1,10 @@
-import { Download, Loader2, Share2, Snowflake } from "lucide-react";
+import {
+  Eye,
+  FolderOpen,
+  Loader2,
+  Pencil,
+  ShieldAlert,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
@@ -43,8 +49,9 @@ export function SharePage() {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-app-muted">
-        <Loader2 className="h-5 w-5 animate-spin" />
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-app-muted">
+        <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
+        <span className="text-xs text-app-faint">正在获取分享空间数据...</span>
       </div>
     );
   }
@@ -52,16 +59,18 @@ export function SharePage() {
   if (!info) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <div className="card p-8">
-          <Share2 className="mx-auto h-10 w-10 text-app-danger" />
-          <h1 className="mt-4 text-xl font-semibold text-app-text">
+        <div className="card p-8 shadow-md">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500 ring-1 ring-red-500/20 dark:bg-red-950/40 dark:text-red-400">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <h1 className="mt-4 text-lg font-bold text-app-text">
             分享链接不可用
           </h1>
-          <p className="mt-2 text-sm text-app-muted">
-            {error ?? "该分组可能已被删除或链接已失效。"}
+          <p className="mt-2 text-xs text-app-muted">
+            {error ?? "该分组已被删除，或分享者已重置该链接的访问令牌。"}
           </p>
-          <p className="mt-4 text-xs text-app-faint">
-            请联系分享者获取新的链接。
+          <p className="mt-4 text-[11px] text-app-faint">
+            如有疑问，请向文件所有者索取最新的访问链接。
           </p>
         </div>
       </div>
@@ -70,42 +79,61 @@ export function SharePage() {
 
   return (
     <div className="space-y-6">
-      <section className="card relative overflow-hidden p-6 sm:p-7">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-[var(--accent-soft)] blur-3xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <div className="vault-kicker flex items-center gap-2">
-              <Snowflake className="h-3.5 w-3.5" />
-              CryoVault / shared unit
+      {/* Cloudreve Style Share Header Card */}
+      <section className="card relative overflow-hidden bg-app-panel p-5 shadow-sm sm:p-6">
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-400">
+              <FolderOpen className="h-6 w-6" />
             </div>
-            <h1 className="mt-2 truncate text-2xl font-semibold tracking-wide text-app-text">
-              {info.name}
-            </h1>
-            <p className="mt-1 text-sm text-app-muted">
-              {info.description || "共享文件分组"}
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
+                  公开分享
+                </span>
+                <h1 className="truncate text-xl font-bold tracking-tight text-app-text sm:text-2xl">
+                  {info.name}
+                </h1>
+              </div>
+              <p className="mt-1 text-xs text-app-muted">
+                {info.description || "分享者未提供分组描述信息"}
+              </p>
+            </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-1.5">
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <span
-              className={info.allow_edit ? "badge text-app-accent" : "badge"}
+              className={
+                info.allow_edit
+                  ? "badge bg-emerald-50 text-emerald-600 ring-1 ring-emerald-500/20 dark:bg-emerald-950/50 dark:text-emerald-300"
+                  : "badge bg-app-panel2 text-app-muted"
+              }
             >
-              {info.allow_edit ? "可编辑文本" : "只读访问"}
+              {info.allow_edit ? (
+                <>
+                  <Pencil className="h-3 w-3" />
+                  可协同编辑文本
+                </>
+              ) : (
+                "只读访问"
+              )}
             </span>
-            <span className="badge">
-              <Download className="h-3.5 w-3.5" />
-              点击文件即可预览
+            <span className="badge bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+              <Eye className="h-3 w-3" />
+              点击文件可直接预览
             </span>
           </div>
         </div>
       </section>
 
       {error && (
-        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-2.5 text-sm text-app-danger">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-3 text-sm text-app-danger">
           {error}
         </div>
       )}
 
-      <FileBrowser adapter={adapter} emptyHint="这个分享分组还没有文件" />
+      {/* Embedded FileBrowser with List/Grid switch & search */}
+      <FileBrowser adapter={adapter} emptyHint="这个分享空间目前还没有文件" />
     </div>
   );
 }

@@ -38,36 +38,53 @@ export function QrPanel({ link, name, hint }: QrPanelProps) {
 
   return (
     <div className="flex flex-col items-center gap-4">
+      {/* High Quality Centered QR Code Card */}
       <div
         ref={wrapRef}
-        className="rounded-2xl border border-app-border bg-[var(--qr-plate)] p-4 shadow-glow"
+        className="rounded-2xl border border-app-border bg-white p-4 shadow-sm dark:bg-white"
       >
-        <QRCodeCanvas value={link} size={208} level="M" includeMargin={false} />
+        <QRCodeCanvas
+          value={link}
+          size={200}
+          level="M"
+          includeMargin={false}
+        />
       </div>
 
+      {/* Action Bar (Link bar, Copy & Download) */}
       <div className="flex w-full items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-app-border bg-app-panel2 px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-app-border bg-app-panel2 px-3 py-2 text-xs">
           <QrCode className="h-4 w-4 shrink-0 text-app-accent" />
-          <span className="truncate font-mono text-xs text-app-muted">{link}</span>
+          <span className="truncate font-mono text-app-muted select-all">
+            {link}
+          </span>
         </div>
-        <button className="btn-outline shrink-0" onClick={copy}>
+        <button
+          className="btn-outline shrink-0 text-xs font-medium"
+          onClick={copy}
+        >
           {copied ? (
-            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+            <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
           ) : (
-            <Copy className="h-4 w-4" />
+            <Copy className="h-3.5 w-3.5" />
           )}
-          {copied ? "已复制" : "复制"}
+          <span>{copied ? "已复制" : "复制链接"}</span>
         </button>
         <button
-          className="btn-outline shrink-0 px-2.5"
+          className="btn-outline shrink-0 p-2 text-app-muted hover:text-app-text"
           onClick={downloadQr}
-          title="保存二维码"
+          title="保存二维码图片"
+          aria-label="保存二维码图片"
         >
           <Download className="h-4 w-4" />
         </button>
       </div>
 
-      {hint && <p className="text-center text-xs text-app-muted">{hint}</p>}
+      {hint && (
+        <p className="text-center text-xs leading-relaxed text-app-muted">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

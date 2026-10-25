@@ -1,16 +1,13 @@
 import { Loader2 } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, RequireAuth } from "./auth";
-import { PANEL_BASE } from "./base";
+import { PANEL_BASE, panelPath } from "./base";
 import { Layout } from "./components/Layout";
 
 const Dashboard = lazy(() =>
   import("./pages/Dashboard").then((m) => ({ default: m.Dashboard }))
-);
-const DirectShare = lazy(() =>
-  import("./pages/DirectShare").then((m) => ({ default: m.DirectShare }))
 );
 const GroupDetail = lazy(() =>
   import("./pages/GroupDetail").then((m) => ({ default: m.GroupDetail }))
@@ -60,7 +57,7 @@ function AdminRoutes() {
         path="direct"
         element={
           <RequireAuth>
-            <DirectShare />
+            <Navigate to={`${panelPath("/")}#single-files`} replace />
           </RequireAuth>
         }
       />

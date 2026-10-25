@@ -50,25 +50,28 @@ export function Modal({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      {/* Backdrop */}
       <div
-        className="absolute inset-0 backdrop-blur-sm"
+        className="absolute inset-0 backdrop-blur-md transition-opacity duration-200"
         style={{ background: "var(--overlay)" }}
         onClick={onClose}
         aria-hidden
       />
+
+      {/* Dialog Card */}
       <div
         role="dialog"
         aria-modal="true"
         className={clsx(
-          "card relative flex w-full flex-col overflow-hidden shadow-glow animate-fade-up",
+          "card relative flex w-full flex-col overflow-hidden rounded-2xl border border-app-border bg-app-panel shadow-2xl transition-all duration-200 animate-fade-up",
           sizes[size]
         )}
       >
         {(title || subtitle) && (
-          <header className="flex items-start justify-between gap-4 border-b border-app-border px-5 py-4">
+          <header className="flex items-start justify-between gap-4 border-b border-app-border/80 px-6 py-4">
             <div className="min-w-0">
               {title && (
-                <h2 className="truncate text-base font-semibold text-app-text">
+                <h2 className="truncate text-base font-bold text-app-text">
                   {title}
                 </h2>
               )}
@@ -79,7 +82,7 @@ export function Modal({
               )}
             </div>
             <button
-              className="btn-ghost -mr-2 -mt-1 p-2"
+              className="btn-ghost -mr-2 -mt-1 h-8 w-8 rounded-xl p-0 text-app-muted hover:text-app-text"
               onClick={onClose}
               aria-label="关闭"
             >
@@ -87,11 +90,13 @@ export function Modal({
             </button>
           </header>
         )}
-        <div className={clsx("min-h-0 flex-1 overflow-auto", padded && "p-5")}>
+
+        <div className={clsx("min-h-0 flex-1 overflow-auto", padded && "p-6")}>
           {children}
         </div>
+
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-app-border px-5 py-3">
+          <footer className="flex items-center justify-end gap-2 border-t border-app-border/80 bg-app-panel2/30 px-6 py-3.5">
             {footer}
           </footer>
         )}
