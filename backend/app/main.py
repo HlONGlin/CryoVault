@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import settings
 from .database import init_db
-from .routers import admin, direct, file_share, files, groups, share
+from .routers import admin, direct, file_share, files, groups, share, update
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(files.router)
 app.include_router(share.router)
 app.include_router(file_share.router)
 app.include_router(direct.router)
+app.include_router(update.router)
 
 
 @app.middleware("http")

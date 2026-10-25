@@ -53,6 +53,25 @@ export interface DirectInfo {
   files: FileItem[];
 }
 
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  update_available: boolean;
+  can_apply: boolean;
+  reason: string | null;
+  tag: string | null;
+  url: string | null;
+  notes: string | null;
+  published_at: string | null;
+  error: string | null;
+  cached: boolean;
+}
+
+export type UpdateEvent =
+  | { event: "log"; message: string }
+  | { event: "done"; changed?: boolean; version?: string; restarted?: boolean; log?: string }
+  | { event: "error"; message: string };
+
 const LEGACY_TOKEN_KEY = "cryovault.adminToken";
 
 /** Remove the legacy localStorage token left by older versions. */
@@ -238,6 +257,54 @@ export const adminApi = {
     onProgress?: (percent: number) => void,
     signal?: AbortSignal
   ) => uploadWithProgress<FileItem[]>("/direct/files", files, onProgress, signal),
+
+  checkUpdate: (force = false) =>
+    request<UpdateInfo>(`/admin/update${force ? "?force=true" : ""}`),
+
+  /** Stream the in-place update; resolves after the final SSE event. */
+  applyUpdate: async (onEvent: (event: UpdateEvent) => void): Promise<void> => {
+    const res = await fetch("/api/admin/update/stream", {
+      credentials: "same-origin",
+      headers: { Accept: "text/event-stream" },
+    });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const data = await res.json();
+        if (typeof data?.detail === "string") detail = data.detail;
+      } catch {
+        /* ignore */
+      }
+      if (res.status === 401) {
+        window.dispatchEvent(new Event("cryovault:unauthorized"));
+      }
+      throw new ApiError(res.status, detail);
+    }
+    if (!res.body) throw new Error("当前浏览器不支持流式更新输出");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index = buffer.indexOf("\n\n");
+      while (index !== -1) {
+        const chunk = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            onEvent(JSON.parse(line.slice(5).trim()) as UpdateEvent);
+          } catch {
+            /* ignore malformed frame */
+          }
+        }
+        index = buffer.indexOf("\n\n");
+      }
+    }
+  },
 };
 
 export const shareApi = {

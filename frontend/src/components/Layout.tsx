@@ -10,6 +10,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { panelPath } from "../base";
 import { useTheme } from "../theme";
+import { UpdateDialog } from "./UpdateDialog";
 
 export function Layout({ children }: { children: ReactNode }) {
   const { status, authRequired, lock } = useAuth();
@@ -58,6 +59,7 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
 
           <div className="flex items-center gap-2">
+            {!isPublic && <UpdateDialog />}
             <button
               className="btn-ghost rounded-xl p-2.5 text-app-muted hover:text-app-text"
               onClick={toggle}

@@ -12,6 +12,11 @@ DATA_DIR="/var/lib/cryovault"
 SERVICE_NAME="cryovault.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
 ENV_FILE="$DATA_DIR/cryovault.env"
+UPDATE_HELPER="$INSTALL_DIR/one-click.sh"
+UPDATE_REPO="HlONGlin/CryoVault"
+UPDATE_ONLY=0
+UPDATE_PORT_ARG=""
+UPDATE_PANEL_ARG=""
 APP_USER="cryovault"
 DEFAULT_PORT="8000"
 
@@ -160,6 +165,14 @@ ensure_node() {
     [ "$node_major" -ge 18 ] 2>/dev/null || die "需要 Node.js 18 或更高版本，当前为 $(node --version)。"
 }
 
+prompt_writable() {
+    # Non-interactive web-console updates: do not print input prompts.
+    if [ "$UPDATE_ONLY" -eq 1 ]; then
+        return 0
+    fi
+    printf "$@"
+}
+
 app_group_name() {
     group="$(id -gn "$APP_USER" 2>/dev/null | head -n 1 || true)"
     [ -n "$group" ] || group="$APP_USER"
@@ -294,7 +307,7 @@ write_env() {
     extra=""
     if [ -f "$ENV_FILE" ]; then
         extra="$(grep -E '^CRYOVAULT_[A-Z0-9_]+=' "$ENV_FILE" \
-            | grep -vE '^CRYOVAULT_(DATA_DIR|BASE_URL|ADMIN_TOKEN|MAX_UPLOAD_SIZE|MAX_TEXT_EDIT_SIZE|COOKIE_SECURE|PANEL_PATH|DOCS_ENABLED)=' \
+            | grep -vE '^CRYOVAULT_(DATA_DIR|BASE_URL|ADMIN_TOKEN|MAX_UPLOAD_SIZE|MAX_TEXT_EDIT_SIZE|COOKIE_SECURE|PANEL_PATH|DOCS_ENABLED|UPDATE_[A-Z]+|INSTALL_DIR|GITHUB_TOKEN)=' \
             || true)"
     fi
 
@@ -308,6 +321,10 @@ CRYOVAULT_MAX_TEXT_EDIT_SIZE=$max_text
 CRYOVAULT_COOKIE_SECURE=$cookie_secure
 CRYOVAULT_PANEL_PATH=$panel_path
 CRYOVAULT_DOCS_ENABLED=false
+CRYOVAULT_UPDATE_ENABLED=true
+CRYOVAULT_INSTALL_DIR=$INSTALL_DIR
+CRYOVAULT_UPDATE_COMMAND=$UPDATE_HELPER
+CRYOVAULT_UPDATE_REPO=$UPDATE_REPO
 EOF
     if [ -n "$extra" ]; then
         printf '%s\n' "$extra" >> "$env_tmp"
@@ -366,21 +383,37 @@ install_manager() {
     ensure_app_user
 
     current_port="$(read_current_port)"
-    printf 'CryoVault 服务端口 [%s]: ' "$current_port"
-    read -r input_port
-    port="$current_port"
-    [ -n "$input_port" ] && port="$input_port"
+    if [ "$UPDATE_ONLY" -eq 1 ] && [ -n "${CRYOVAULT_UPDATE_PORT:-}" ]; then
+        current_port="$CRYOVAULT_UPDATE_PORT"
+    fi
+    if [ "$UPDATE_ONLY" -eq 1 ]; then
+        # Non-interactive: reuse the deployed port and panel path as-is.
+        port="$current_port"
+        input_port=""
+        panel_path="$(read_env_value CRYOVAULT_PANEL_PATH "$ENV_FILE")"
+        [ -n "$panel_path" ] || panel_path="$(ensure_panel_path)"
+    else
+        prompt_writable 'CryoVault 服务端口 [%s]: ' "$current_port"
+        read -r input_port
+        port="$current_port"
+        [ -n "$input_port" ] && port="$input_port"
+        panel_path="$(ensure_panel_path)"
+    fi
     validate_port "$port" || die "端口必须是 1-65535 之间的数字。"
 
     token="$(prompt_for_token)"
     validate_token "$token" || die "管理员令牌无效。"
-    panel_path="$(ensure_panel_path)"
 
     build_root="$(mktemp -d /tmp/cryovault-install.XXXXXX)"
     trap 'rm -rf "${build_root:-}"' EXIT
     archive="$build_root/cryovault.tar.gz"
     source_dir="$build_root/source"
     mkdir -p "$source_dir"
+
+    if [ "$UPDATE_ONLY" -eq 1 ]; then
+        # Only reload the unit file when the deployed template changed.
+        service_before="$(cat "$SERVICE_FILE" 2>/dev/null || true)"
+    fi
 
     log "下载 CryoVault 源码..."
     download "$REPO_TARBALL" "$archive" || die "源码下载失败。"
@@ -419,7 +452,11 @@ install_manager() {
     write_env "$token" "$port" "$panel_path"
     write_service "$port"
 
-    systemctl daemon-reload
+    if [ "$UPDATE_ONLY" -eq 1 ] && [ "$service_before" = "$(cat "$SERVICE_FILE")" ]; then
+        :
+    else
+        systemctl daemon-reload
+    fi
     systemctl enable "$SERVICE_NAME" >/dev/null
     if ! systemctl restart "$SERVICE_NAME"; then
         warn "新版本启动失败，正在恢复上一版本..."
@@ -548,8 +585,60 @@ EOF
     printf '请选择 [0-6]: '
 }
 
+strip_panel_prefix() {
+    value="$1"
+    if [[ "$value" == /panel/* ]]; then
+        value="${value#/panel/}"
+    fi
+    printf '%s' "$value"
+}
+
+# --update-only is called by the web console updater (app/updater.py). It is
+# deliberately non-interactive: every prompt is skipped and every failure
+# exits non-zero so the API can report it.
+# __CRYOVAULT_UPDATE__
+parse_args() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --update-only)
+                UPDATE_ONLY=1
+                ;;
+            --port)
+                shift
+                UPDATE_PORT_ARG="${1:-}"
+                ;;
+            --panel-path)
+                shift
+                UPDATE_PANEL_ARG="$(strip_panel_prefix "${1:-}")"
+                ;;
+            *)
+                die "未知参数：$1"
+                ;;
+        esac
+        shift || true
+    done
+}
+
+parse_args "$@"
+
 require_root
 require_systemd
+
+if [ "$UPDATE_ONLY" -eq 1 ]; then
+    [ -f "$SERVICE_FILE" ] || die "CryoVault 尚未安装，无法在线更新。"
+    [ -n "$(read_env_value CRYOVAULT_ADMIN_TOKEN "$ENV_FILE")" ] || die "配置文件中缺少管理员令牌。"
+    if [ -n "$UPDATE_PORT_ARG" ]; then
+        validate_port "$UPDATE_PORT_ARG" || die "端口参数无效。"
+    fi
+    export CRYOVAULT_UPDATE_PORT="$UPDATE_PORT_ARG"
+    export CRYOVAULT_UPDATE_PANEL_PATH="$UPDATE_PANEL_ARG"
+    # Admins cannot answer console prompts (vault owned by the service user,
+    # minimal host): skip the port question and keep the existing account.
+    export CRYOVAULT_ADMIN_TOKEN="$(read_env_value CRYOVAULT_ADMIN_TOKEN "$ENV_FILE")"
+    exec < /dev/null
+    install_manager
+    exit 0
+fi
 
 while true; do
     show_menu

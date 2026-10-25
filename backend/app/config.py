@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     # Extra allowed CORS origins. Empty means same-origin only.
     cors_origins: list[str] = []
 
+    # --- Updates -------------------------------------------------------
+    # Allow admins to install updates from the web console. The installer
+    # enables this only for systemd deployments and restricts the helper to
+    # the lines below.
+    update_enabled: bool = False
+    update_repo: str = "HlONGlin/CryoVault"
+    update_branch: str = "main"
+    update_check_timeout: float = 6.0
+    update_command: str = ""
+    install_dir: str = ""
+    # Optional token to lift the anonymous GitHub API rate limit.
+    github_token: str = ""
+
     @property
     def normalized_panel_path(self) -> str:
         """Panel path with a leading slash, sanitized and without trailing slash."""

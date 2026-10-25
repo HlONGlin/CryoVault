@@ -116,6 +116,16 @@ bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
 - 支持浅色和深色主题
 - 根路径在启用管理路径时默认返回 404
 
+### 在线更新
+
+- 管理员登录后自动检查 GitHub 上的最新版本；有新版时顶栏出现闪烁的「更新 x.y.z」按钮
+- 未登录时同样会检查并显示按钮，点击会提示先解锁
+- 弹窗内展示当前版本、最新版本、发布说明与更新日志
+- 「立即更新」由后端调用已安装的一键脚本 `--update-only` 覆盖升级并重启服务，页面自动刷新
+- 「跳过此版本」只在当前浏览器记住该版本，不会再次主动弹出
+- 「检查更新」可随时手动重新查询
+- 在线更新仅在 Linux + systemd 一键安装的部署中可用；其他部署会显示原因并给出 GitHub 链接
+
 ## 运行架构
 
 ```mermaid
@@ -241,6 +251,15 @@ npm run dev -- --host 0.0.0.0
 | `CRYOVAULT_DOCS_ENABLED` | `true` | 是否开放 `/docs` 和 `/openapi.json` |
 | `CRYOVAULT_CORS_ORIGINS` | `[]` | 额外允许的跨域来源列表 |
 | `CRYOVAULT_TRUST_PROXY_HEADERS` | `false` | 反向代理部署时是否信任转发头 |
+| `CRYOVAULT_UPDATE_ENABLED` | `false` | 是否允许在网页内执行在线更新；一键脚本会自动设为 `true` |
+| `CRYOVAULT_UPDATE_COMMAND` | 空 | 更新脚本命令，一键脚本写为 `/opt/cryovault/one-click.sh` |
+| `CRYOVAULT_INSTALL_DIR` | 自动推断 | 安装目录，用于定位更新脚本和 `VERSION` |
+| `CRYOVAULT_UPDATE_REPO` | `HlONGlin/CryoVault` | 检查更新使用的 GitHub 仓库 |
+| `CRYOVAULT_UPDATE_BRANCH` | `main` | 没有 GitHub Release 时读取 `VERSION` 的分支 |
+| `CRYOVAULT_UPDATE_CHECK_TIMEOUT` | `6` | 访问 GitHub 的超时时间，单位为秒 |
+| `CRYOVAULT_GITHUB_TOKEN` | 空 | 可选，用于提高 GitHub API 匿名请求限额 |
+
+> `CRYOVAULT_UPDATE_COMMAND` 只允许指向安装目录内的脚本，且只接受 `--port`、`--panel-path` 两个参数，脚本必须包含 `--update-only` 入口，避免该配置被用来执行任意命令。更新默认以内置管理员身份直接运行脚本；若服务以普通用户运行则需要免密 `sudo`。
 
 生产环境至少应设置：
 
