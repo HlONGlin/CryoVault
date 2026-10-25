@@ -1,174 +1,234 @@
+<div align="center">
+
 # CryoVault
 
-CryoVault 是一个面向 Linux 自托管场景的轻量网盘，支持本地文件存储、分组管理、二维码分享，以及常见文件的在线预览。
+**一个专注于本地存储、快速分享和文件预览的轻量级自托管网盘。**
 
-## 功能
+管理端使用令牌保护，文件保存在自己的磁盘上；分组链接和单文件链接可以直接交付给其他人，无需登录。
 
-- 本地文件系统保存上传数据，SQLite 保存分组和文件元数据
-- 管理员令牌独立登录页，解锁后才能管理分组和上传文件
-- 白天 / 夜间双主题，顶部一键切换，选择会保存在浏览器本地
-- 分组上传、搜索、重命名、删除和批量上传
-- 每个分组拥有独立分享链接，可生成二维码 PNG
-- 单文件分享：任意文件可单独生成下载链接和二维码，无需创建分组
-- 分享页无需登录，可浏览并下载分组内文件
-- TXT、YAML、JSON、Markdown、代码等 UTF-8 文本在线查看和编辑
-- 图片预览与缩放，视频支持浏览器原生播放和 Range 拖动，音频支持播放
-- 管理 API token 由后端校验；分享链接不需要管理 token
-- 开发模式支持手机通过局域网访问前端，适合扫码测试
+<br />
 
-## 技术栈
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-149eca?style=flat-square&logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-local-003B57?style=flat-square&logo=sqlite&logoColor=white)
 
-- Backend: Python 3.10+、FastAPI、SQLAlchemy、SQLite
-- Frontend: React、TypeScript、Vite、Tailwind CSS、CodeMirror
-- Storage: `CRYOVAULT_DATA_DIR/storage`
+</div>
 
-## Linux 快速启动
+## 目录
+
+- [项目定位](#项目定位)
+- [功能概览](#功能概览)
+- [运行架构](#运行架构)
+- [快速启动](#快速启动)
+- [管理与分享](#管理与分享)
+- [配置项](#配置项)
+- [开发命令](#开发命令)
+- [生产部署](#生产部署)
+- [项目结构](#项目结构)
+- [后续规划](#后续规划)
+
+## 项目定位
+
+CryoVault 适合以下场景：
+
+- 在家用服务器、NAS 或 Linux 小主机上保存个人文件
+- 为一组资料生成一个公开浏览入口
+- 临时分享单个文件，不想为了一个文件创建完整目录
+- 在浏览器中预览图片、音视频和常见文本文件
+- 需要一个简单、可控、数据留在本地的文件交付工具
+
+它不是面向多租户团队协作的企业网盘，当前重点是单管理员、自托管和低维护成本。
+
+## 功能概览
+
+### 文件管理
+
+- 分组保险库：为不同主题建立独立的文件空间
+- 直接上传：不创建分组也可以保存并分享文件
+- 点击或拖拽上传，支持批量选择
+- 上传进度显示与取消上传
+- 文件名搜索、类型筛选、名称/大小/修改时间排序
+- 网格视图与列表视图，可记住浏览器中的选择
+- 图片预览与缩放
+- 视频、音频浏览器内播放
+- TXT、Markdown、JSON、YAML 和常见代码文件在线查看与编辑
+- 单个删除、批量删除、重命名
+- 选择多个文件后打包下载 ZIP
+
+### 分享交付
+
+- 分组分享链接：一次分享一个文件空间
+- 单文件分享链接：直接交付一个文件
+- 分享链接可生成二维码并下载 PNG
+- 分享页无需管理员登录
+- 文本文件可以按分享权限开启在线编辑
+- 可以随时撤销单文件链接，或重新生成分组链接
+
+### 管理与安全
+
+- 管理端使用管理员令牌解锁
+- 登录后由 HttpOnly 会话 Cookie 维持状态
+- 管理端可以使用随机路径隐藏入口
+- 管理 API 与公开分享 API 分开
+- 支持登录失败限流
+- 支持浅色和深色主题
+- 根路径在启用管理路径时默认返回 404
+
+## 运行架构
+
+```mermaid
+flowchart LR
+    Browser[浏览器] -->|管理端 / 分享页| FastAPI[FastAPI]
+    FastAPI --> SQLite[(SQLite 元数据)]
+    FastAPI --> Storage[本地文件存储]
+    FastAPI --> Session[HttpOnly 会话]
+    FastAPI --> Public[公开分享接口]
+```
+
+项目由两个部分组成：
+
+| 部分 | 技术 | 作用 |
+| --- | --- | --- |
+| 后端 | Python、FastAPI、SQLAlchemy | 鉴权、文件 API、分享 API、静态文件托管 |
+| 前端 | React、TypeScript、Vite、Tailwind CSS | 管理控制台、文件预览、分享页面 |
+| 数据 | SQLite | 分组、文件元数据、分享令牌 |
+| 文件 | 本地目录 | 保存上传文件的实际内容 |
+
+默认数据目录为 `backend/data`，其中包含 SQLite 数据库和 `storage` 文件目录。
+
+## 快速启动
+
+### Linux / macOS
 
 ```bash
 chmod +x start.sh
 ./start.sh
 ```
 
-首次运行会自动生成管理员令牌和随机访问路径，写入 `backend/.env`，构建前端后启动服务。终端会打印完整管理地址，形如：
+首次启动会自动：
+
+1. 创建 Python 虚拟环境
+2. 安装后端依赖
+3. 安装前端依赖
+4. 构建前端
+5. 生成管理员令牌和管理端路径
+6. 启动 FastAPI 服务
+
+启动完成后，终端会显示类似信息：
 
 ```text
-管理地址：http://192.168.1.20:8000/panel/8d9cf22f5a339f989e3fac6d5bca4f67
-管理员令牌：c4b8c77dbe95a7e4950db620602fa15c
+管理地址：http://127.0.0.1:8000/panel/随机路径
+管理员令牌：请使用终端实际显示的令牌
 ```
 
-直接访问根路径 `/` 会返回 404，必须使用带随机后缀的完整地址。
+启用随机管理路径后，必须使用完整的管理地址。访问 `/` 返回 404 是正常行为。
 
-其他用法：
+### Windows 开发环境
+
+后端：
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:CRYOVAULT_ADMIN_TOKEN = "your-test-token"
+$env:CRYOVAULT_PANEL_PATH = "/panel/dev"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+前端另开一个终端：
+
+```powershell
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0
+```
+
+前端开发服务器默认使用 `http://localhost:5173`，并将 `/api` 请求代理到后端。
+
+### 启动脚本参数
 
 ```bash
-./start.sh 9000          # 指定端口
-./start.sh --print-url   # 只打印当前管理地址和令牌
-./start.sh --dev         # 前端开发模式（Vite 5173，不使用随机路径）
+./start.sh 9000          # 使用 9000 端口启动单服务
+./start.sh --print-url   # 只打印当前管理地址和管理员令牌
+./start.sh --dev         # 启动 Vite + FastAPI 开发模式
+./start.sh --help        # 查看帮助
 ```
 
-API 文档默认关闭；如需临时开启，在 `backend/.env` 中设置 `CRYOVAULT_DOCS_ENABLED=true`。
-
-## 一键安装与管理
-
-在支持 systemd 的 Linux 服务器上，使用 root 执行下面的命令，直接进入 CryoVault 数字管理菜单：
-
-```bash
-bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
-```
-
-脚本会检查并安装 Python、Node.js 等依赖，下载项目源码、构建前端、配置 systemd 服务并启动 CryoVault。首次安装时会提示设置管理员令牌，安装完成后会显示带随机后缀的完整管理地址和令牌。
-
-管理地址形如 `http://服务器IP:8000/panel/3f9a...`，其中 `/panel/` 后的随机字符由脚本生成。直接访问根路径 `/` 会返回 404，只有完整地址才能进入管理端。
-
-打开管理地址后会进入独立的管理员解锁页，输入令牌后才能管理分组、上传文件和生成分享链接。令牌与后端 `CRYOVAULT_ADMIN_TOKEN` 一致。
-
-数字菜单提供以下操作：
-
-1. 安装或更新 CryoVault
-2. 启动 CryoVault
-3. 停止 CryoVault
-4. 彻底卸载并清除全部数据
-5. 重置管理员令牌（保留文件数据）
-6. 重新生成访问路径（保留文件数据）
-
-默认安装位置：
-
-- 程序：`/opt/cryovault`
-- 文件、SQLite 数据库和配置：`/var/lib/cryovault`
-- systemd 服务：`cryovault.service`
-
-彻底卸载会同时删除上传文件、数据库和管理员令牌，脚本会要求输入 `DELETE` 二次确认。重置管理员令牌只修改访问凭据；重新生成访问路径会让旧地址立即失效，两者都不会删除分组或文件。
-
-## 使用方式
+## 管理与分享
 
 ### 管理员解锁
 
-管理端只存在于随机路径下，例如 `http://服务器IP:8000/panel/3f9a...`。访问根路径 `/` 或猜测的普通路径都会返回 404。
+打开启动脚本打印的管理地址，输入 `CRYOVAULT_ADMIN_TOKEN` 对应的令牌即可解锁。右上角的锁定按钮会注销当前管理会话。
 
-打开该地址后会跳转到解锁页。输入 `CRYOVAULT_ADMIN_TOKEN` 对应的令牌后解锁；右上角「锁定」可以立即退出管理状态。分享页面（`/s/...` 和 `/f/...`）始终公开，不需要令牌。
-
-登录失败会触发限流：默认 5 分钟内失败 5 次后暂时拒绝新的解锁请求。
-
-顶部导航右侧的太阳 / 月亮按钮用于切换白天与夜间主题。首次访问默认跟随系统配色，手动切换后会记住选择。
+管理端不会把令牌写入 URL。登录失败默认受限流保护，具体次数和窗口可以通过配置项调整。
 
 ### 分组分享
 
-1. 解锁后进入「冷冻数据舱」。
-2. 新建分组并上传文件。
-3. 点击分组的二维码按钮，生成分组分享链接和二维码。
+1. 创建一个分组。
+2. 进入分组并上传文件。
+3. 点击分组分享按钮。
+4. 复制链接或下载二维码。
 
 ### 单文件分享
 
-如果只想分享一个文件，不必先建分组：
+1. 在管理首页的“直接上传”区域上传文件。
+2. 在文件卡片或列表操作区打开分享面板。
+3. 复制下载链接或生成二维码。
+4. 需要时撤销链接，旧链接会立即失效。
 
-1. 在管理首页或顶部导航进入「单文件分享」。
-2. 上传文件。
-3. 在文件卡片上点击分享图标，生成独立下载链接和二维码。
-4. 可选「允许编辑」让文本文件通过链接直接修改；「撤销链接」会立即使旧二维码失效。
+分享页面使用 `/s/<token>`，单文件页面使用 `/f/<token>`。两类公开页面都不需要管理员令牌。
 
-手机扫码时，需要使用 Linux 主机在局域网中的地址访问前端，例如 `http://192.168.1.20:5173`。防火墙需要放行前端端口；后端端口通常只需要被本机和前端开发代理访问。
+## 配置项
 
-## 生产部署
+开发模式通常使用 `backend/.env`。所有环境变量均使用 `CRYOVAULT_` 前缀。
 
-先构建前端：
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `CRYOVAULT_DATA_DIR` | `data` | SQLite 数据库和上传文件目录 |
+| `CRYOVAULT_ADMIN_TOKEN` | 空 | 管理员令牌；为空时不要求解锁 |
+| `CRYOVAULT_PANEL_PATH` | 空 | 管理端路径，例如 `/panel/abc123` |
+| `CRYOVAULT_BASE_URL` | `http://localhost:5173` | 外部系统使用的前端地址 |
+| `CRYOVAULT_MAX_UPLOAD_SIZE` | `0` | 单文件上传上限，单位为字节；0 表示不限 |
+| `CRYOVAULT_MAX_TEXT_EDIT_SIZE` | `5242880` | 在线编辑器允许处理的最大文本大小 |
+| `CRYOVAULT_COOKIE_SECURE` | `false` | 使用 HTTPS 时建议设为 `true` |
+| `CRYOVAULT_SESSION_MAX_AGE` | `2592000` | 管理会话最长有效期，单位为秒 |
+| `CRYOVAULT_LOGIN_MAX_ATTEMPTS` | `5` | 登录限流窗口内允许的失败次数 |
+| `CRYOVAULT_LOGIN_WINDOW_SECONDS` | `300` | 登录限流窗口，单位为秒 |
+| `CRYOVAULT_DOCS_ENABLED` | `true` | 是否开放 `/docs` 和 `/openapi.json` |
+| `CRYOVAULT_CORS_ORIGINS` | `[]` | 额外允许的跨域来源列表 |
+| `CRYOVAULT_TRUST_PROXY_HEADERS` | `false` | 反向代理部署时是否信任转发头 |
+
+生产环境至少应设置：
+
+```dotenv
+CRYOVAULT_ADMIN_TOKEN=一段随机长令牌
+CRYOVAULT_PANEL_PATH=/panel/一段随机路径
+CRYOVAULT_COOKIE_SECURE=true
+CRYOVAULT_DOCS_ENABLED=false
+```
+
+## 开发命令
+
+构建前端：
 
 ```bash
 cd frontend
 npm install
 npm run build
-cd ..
 ```
 
-再启动后端：
+只做 TypeScript 检查：
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd frontend
+npm run typecheck
 ```
 
-如果 `frontend/dist` 存在，FastAPI 会自动托管构建后的前端。生产环境建议通过 Nginx 或 Caddy 配置 HTTPS，将 `CRYOVAULT_ADMIN_TOKEN` 设置为随机长 token，并设置随机 `CRYOVAULT_PANEL_PATH`（例如 `/panel/$(openssl rand -hex 16)`）。
-
-## 常见问题
-
-### 管理地址端口后面没有随机后缀
-
-按顺序排查：
-
-1. 确认用的是最新代码。一键脚本安装的服务器请重新运行脚本并选择「1. 安装或更新 CryoVault」；源码部署请 `git pull` 后重新执行 `./start.sh`。
-2. 执行 `./start.sh --print-url` 直接查看当前地址和令牌。
-3. 检查 `backend/.env`：`CRYOVAULT_PANEL_PATH` 应形如 `/panel/8d9cf22f...`。为空、`/panel/` 或格式非法时，启动脚本会自动重新生成。
-4. 如果之前用旧版本构建过前端，旧的 `frontend/dist/index.html` 不含路径占位符，会导致前缀丢失。`./start.sh` 每次启动都会重新构建前端。
-5. `./start.sh --dev` 是前端开发模式，不启用随机路径，这是正常行为。
-
-访问 `http://服务器IP:8000/` 返回 404 也是预期行为，必须使用带随机后缀的完整地址。
-
-## 配置
-
-开发模式配置使用 `backend/.env`；一键脚本安装后的配置位于 `/var/lib/cryovault/cryovault.env`。变量前缀均为 `CRYOVAULT_`：
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `CRYOVAULT_DATA_DIR` | `data` | SQLite 数据库和上传文件目录 |
-| `CRYOVAULT_ADMIN_TOKEN` | 空 | 管理接口 token，空值表示不启用管理鉴权 |
-| `CRYOVAULT_PANEL_PATH` | 空 | 管理端随机访问路径，如 `/panel/3f9a…`；设置后根路径返回 404 |
-| `CRYOVAULT_DOCS_ENABLED` | `true` | 是否暴露 `/docs` 与 `/openapi.json`；一键脚本默认关闭 |
-| `CRYOVAULT_MAX_UPLOAD_SIZE` | `0` | 单文件上传上限，单位字节，0 表示不限 |
-| `CRYOVAULT_MAX_TEXT_EDIT_SIZE` | `5242880` | 在线编辑器允许的最大文本大小，单位字节 |
-| `CRYOVAULT_COOKIE_SECURE` | `false` | 通过 HTTPS 访问时设为 `true` |
-| `CRYOVAULT_LOGIN_MAX_ATTEMPTS` | `5` | 登录窗口内允许的失败次数 |
-| `CRYOVAULT_LOGIN_WINDOW_SECONDS` | `300` | 登录限流窗口，单位秒 |
-| `CRYOVAULT_TRUST_PROXY_HEADERS` | `false` | 仅当部署在反向代理后时启用，按 `X-Forwarded-For` 识别客户端 |
-| `CRYOVAULT_CORS_ORIGINS` | `[]` | 额外允许的跨域来源；默认仅同源 |
-| `CRYOVAULT_BASE_URL` | `http://localhost:5173` | 外部集成使用的前端地址 |
-
-管理员解锁后，后端会签发 HttpOnly 会话 Cookie；令牌只通过请求头提交一次，不会出现在 URL、访问日志或浏览器历史中。
-
-## 验证
-
-后端冒烟测试需要额外的测试依赖：
+运行后端冒烟测试：
 
 ```bash
 cd backend
@@ -177,9 +237,87 @@ pip install -r requirements-dev.txt
 python smoke_test.py
 ```
 
-前端构建：
+Windows PowerShell 激活虚拟环境时使用：
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python smoke_test.py
+```
+
+## 生产部署
+
+可以让 FastAPI 直接托管 `frontend/dist`：
 
 ```bash
 cd frontend
+npm ci
 npm run build
+
+cd ../backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+更适合长期运行的方式是使用 Nginx 或 Caddy 放在前面处理 HTTPS，再将请求转发到 Uvicorn。建议：
+
+- 使用随机、足够长的管理员令牌
+- 设置随机 `CRYOVAULT_PANEL_PATH`
+- 开启 HTTPS 后设置 `CRYOVAULT_COOKIE_SECURE=true`
+- 关闭不需要的 API 文档
+- 定期备份 `CRYOVAULT_DATA_DIR`
+- 不把 `backend/data` 目录直接暴露给 Web 服务器
+
+仓库提供一键安装脚本，可在支持 systemd 的 Linux 服务器上使用：
+
+```bash
+bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
+```
+
+默认安装位置：
+
+| 内容 | 路径 |
+| --- | --- |
+| 程序 | `/opt/cryovault` |
+| 数据与配置 | `/var/lib/cryovault` |
+| systemd 服务 | `cryovault.service` |
+
+## 项目结构
+
+```text
+CryoVault/
+├─ backend/
+│  ├─ app/
+│  │  ├─ routers/       # 管理、文件、分组和分享 API
+│  │  ├─ models.py      # SQLAlchemy 数据模型
+│  │  ├─ operations.py  # 文件保存、读取、删除和分享逻辑
+│  │  └─ main.py        # FastAPI 应用与静态前端托管
+│  └─ smoke_test.py     # 后端冒烟测试
+├─ frontend/
+│  ├─ src/
+│  │  ├─ components/    # 文件浏览器、分享面板、预览和编辑器
+│  │  ├─ pages/         # 管理页、分组页和公开分享页
+│  │  └─ api.ts         # 前端 API 客户端
+│  └─ public/assets/    # favicon 等静态资源
+├─ start.sh             # 构建并启动脚本
+└─ one-click.sh         # Linux 一键安装与管理脚本
+```
+
+## 后续规划
+
+当前版本已经覆盖个人网盘的基础闭环。后续可以继续加入：
+
+- 分组内嵌套文件夹与文件移动
+- 回收站、恢复和自动清理
+- 断点续传与大文件分片上传
+- 存储配额和磁盘空间提示
+- 大文件列表分页或虚拟滚动
+- 批量重命名和批量移动
+- 多用户、角色和细粒度权限
+- 可选的对象存储后端
+
+## 许可证
+
+当前仓库未声明独立许可证。公开发布或二次分发前，请先补充适用的许可证文件。
