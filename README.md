@@ -19,6 +19,7 @@
 ## 目录
 
 - [项目定位](#项目定位)
+- [一键部署（推荐）](#一键部署推荐)
 - [功能概览](#功能概览)
 - [运行架构](#运行架构)
 - [快速启动](#快速启动)
@@ -40,6 +41,45 @@ CryoVault 适合以下场景：
 - 需要一个简单、可控、数据留在本地的文件交付工具
 
 它不是面向多租户团队协作的企业网盘，当前重点是单管理员、自托管和低维护成本。
+
+## 一键部署（推荐）
+
+适用于支持 `systemd` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python / Node.js 依赖、构建前端、创建独立服务用户、写入配置，并注册 `cryovault.service`。
+
+```bash
+bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
+```
+
+脚本会进入交互式管理菜单：
+
+| 选项 | 操作 |
+| --- | --- |
+| `1` | 安装或更新 CryoVault |
+| `2` | 启动服务 |
+| `3` | 停止服务 |
+| `4` | 卸载并清除全部数据 |
+| `5` | 重置管理员令牌，保留文件 |
+| `6` | 重新生成管理访问路径 |
+| `0` | 退出菜单 |
+
+首次安装时，脚本会让你设置管理员令牌；直接回车则自动生成。安装完成后会打印完整管理地址和令牌，请妥善保存：
+
+```text
+管理地址：http://服务器IP:8000/panel/随机路径
+管理员令牌：安装时设置或自动生成的令牌
+```
+
+脚本默认使用以下路径：
+
+| 内容 | 路径 |
+| --- | --- |
+| 程序 | `/opt/cryovault` |
+| 文件、数据库和配置 | `/var/lib/cryovault` |
+| systemd 服务 | `cryovault.service` |
+
+> 卸载操作会删除程序、上传文件、数据库、令牌和配置，并要求输入 `DELETE` 二次确认。重置令牌和重新生成访问路径不会删除文件。
+
+脚本源码位于仓库根目录：[one-click.sh](./one-click.sh)。
 
 ## 功能概览
 
@@ -270,19 +310,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 - 定期备份 `CRYOVAULT_DATA_DIR`
 - 不把 `backend/data` 目录直接暴露给 Web 服务器
 
-仓库提供一键安装脚本，可在支持 systemd 的 Linux 服务器上使用：
-
-```bash
-bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
-```
-
-默认安装位置：
-
-| 内容 | 路径 |
-| --- | --- |
-| 程序 | `/opt/cryovault` |
-| 数据与配置 | `/var/lib/cryovault` |
-| systemd 服务 | `cryovault.service` |
+一键安装和服务管理请参阅前面的[一键部署](#一键部署推荐)章节。
 
 ## 项目结构
 
