@@ -41,6 +41,10 @@ require_systemd() {
     command -v systemctl >/dev/null 2>&1 || die "当前系统未找到 systemd/systemctl。"
 }
 
+require_runtime_user() {
+    [ "$(id -u)" -eq 0 ] || die "在线更新需要以 root 运行安装脚本（service 也需以 root 运行），当前用户为 $(id -un)。请使用 sudo 重新执行：sudo bash $0 --update-only"
+}
+
 download() {
     url="$1"
     output="$2"
@@ -345,8 +349,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=$APP_USER
-Group=$app_group
 WorkingDirectory=$INSTALL_DIR/backend
 EnvironmentFile=$ENV_FILE
 ExecStart=$INSTALL_DIR/backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $port
@@ -355,8 +357,7 @@ RestartSec=5
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=$DATA_DIR
-NoNewPrivileges=true
+ReadWritePaths=$DATA_DIR /tmp
 
 [Install]
 WantedBy=multi-user.target
@@ -379,6 +380,7 @@ detect_host() {
 install_manager() {
     require_root
     require_systemd
+    require_runtime_user
     ensure_runtime
     ensure_app_user
 
@@ -623,6 +625,7 @@ parse_args "$@"
 
 require_root
 require_systemd
+require_runtime_user
 
 if [ "$UPDATE_ONLY" -eq 1 ]; then
     [ -f "$SERVICE_FILE" ] || die "CryoVault 尚未安装，无法在线更新。"

@@ -17,6 +17,7 @@ JSON progress lines are printed to stdout for the API to stream.
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 import re
@@ -251,10 +252,18 @@ def main() -> int:
 
         _log(f"准备从 {current} 更新到 {target}…")
         if os.geteuid() != 0:
-            _log("当前进程非 root，将通过 sudo 执行安装脚本。")
+            raise UpdateError(
+                "在线更新需要服务以 root 身份运行，而以普通用户 "
+                f"{getpass.getuser()} 启动时无法安装软件包或写入安装目录。\n"
+                "请将 systemd 服务改为 root 运行后重试：\n"
+                f"  sudo sed -i '/^User=/d;/^Group=/d' /etc/systemd/system/cryovault.service\n"
+                "  sudo systemctl daemon-reload && sudo systemctl restart cryovault\n"
+                "若部署在禁止提权的容器内（no_new_privs），请改为在宿主机手动执行 "
+                f"{settings.update_command} --update-only，或在 .env 中设置 "
+                "CRYOVAULT_UPDATE_ENABLED=false 关闭在线更新。"
+            )
 
-        elevated = ["sudo", "-n", "--"] if os.geteuid() != 0 else []
-        installer = elevated + command
+        installer = command
         _log("$ " + " ".join(shlex.quote(part) for part in installer))
 
         log_path = os.path.join("/tmp", f"cryovault-update-{os.getpid()}.log")

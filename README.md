@@ -75,7 +75,7 @@ bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
 | --- | --- |
 | 程序 | `/opt/cryovault` |
 | 文件、数据库和配置 | `/var/lib/cryovault` |
-| systemd 服务 | `cryovault.service` |
+| systemd 服务 | `cryovault.service`（以 root 运行，支持网页内一键更新） |
 
 > 卸载操作会删除程序、上传文件、数据库、令牌和配置，并要求输入 `DELETE` 二次确认。重置令牌和重新生成访问路径不会删除文件。
 
@@ -259,7 +259,7 @@ npm run dev -- --host 0.0.0.0
 | `CRYOVAULT_UPDATE_CHECK_TIMEOUT` | `6` | 访问 GitHub 的超时时间，单位为秒 |
 | `CRYOVAULT_GITHUB_TOKEN` | 空 | 可选，用于提高 GitHub API 匿名请求限额 |
 
-> `CRYOVAULT_UPDATE_COMMAND` 只允许指向安装目录内的脚本，且只接受 `--port`、`--panel-path` 两个参数，脚本必须包含 `--update-only` 入口，避免该配置被用来执行任意命令。更新默认以内置管理员身份直接运行脚本；若服务以普通用户运行则需要免密 `sudo`。
+> `CRYOVAULT_UPDATE_COMMAND` 只允许指向安装目录内的脚本，且只接受 `--port`、`--panel-path` 两个参数，脚本必须包含 `--update-only` 入口，避免该配置被用来执行任意命令。在线更新要求 CryoVault 服务以 root 运行（一键脚本生成的 systemd 单元不再指定 `User=`），因为安装过程需要写入 `/opt/cryovault`、安装系统软件包并重启服务。若服务以普通用户运行，更新对话框会直接提示如何修改 systemd 单元；在禁止提权的容器（`no_new_privs`）中请改为在宿主机执行 `sudo bash /opt/cryovault/one-click.sh --update-only`。
 
 生产环境至少应设置：
 
