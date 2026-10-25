@@ -119,40 +119,40 @@ export function GroupDetail() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Cloudreve Style Breadcrumb */}
-      <nav className="flex items-center gap-2 text-xs text-app-muted">
+      <nav className="flex min-w-0 items-center gap-2 text-xs text-app-muted">
         <Link
           to={panelPath("/")}
-          className="flex items-center gap-1.5 font-medium transition hover:text-app-text"
+          className="flex shrink-0 items-center gap-1.5 font-medium transition hover:text-app-text"
         >
           <Home className="h-3.5 w-3.5" />
           <span>文件库</span>
         </Link>
-        <ChevronRight className="h-3.5 w-3.5 text-app-faint" />
-        <span className="font-semibold text-app-text">{group.name}</span>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-app-faint" />
+        <span className="truncate font-semibold text-app-text">{group.name}</span>
       </nav>
 
       {/* Cloudreve Style Group Hero Card */}
-      <div className="card relative overflow-hidden bg-app-panel p-5 shadow-sm sm:p-6">
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-400">
-              <FolderOpen className="h-7 w-7" />
+      <div className="card relative overflow-hidden bg-app-panel p-4 shadow-sm sm:p-6">
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-400 sm:h-14 sm:w-14">
+              <FolderOpen className="h-6 w-6 sm:h-7 sm:w-7" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-xl font-bold tracking-tight text-app-text sm:text-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="max-w-full truncate text-lg font-bold tracking-tight text-app-text sm:text-2xl">
                   {group.name}
                 </h1>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
+                <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 sm:text-[11px]">
                   Vault #{String(group.id).padStart(2, "0")}
                 </span>
               </div>
               <p className="mt-1 text-xs text-app-muted">
                 {group.description || "暂无分组描述信息"}
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs sm:mt-3 sm:gap-2">
                 <span className="chip">
                   <FolderOpen className="h-3 w-3 text-app-faint" />
                   {group.file_count} 个文件
@@ -176,18 +176,18 @@ export function GroupDetail() {
 
           <div className="flex shrink-0 items-center gap-2">
             <button
-              className="btn-outline h-9 px-3.5 text-xs font-medium"
+              className="btn-outline h-9 flex-1 px-3 text-xs font-medium sm:flex-none sm:px-3.5"
               onClick={() => setSettingsOpen(true)}
             >
               <Settings2 className="h-3.5 w-3.5" />
               <span>设置</span>
             </button>
             <button
-              className="btn-primary h-9 px-3.5 text-xs font-semibold"
+              className="btn-primary h-9 flex-1 px-3 text-xs font-semibold sm:flex-none sm:px-3.5"
               onClick={() => setShareOpen(true)}
             >
               <QrCode className="h-3.5 w-3.5" />
-              <span>分享二维码</span>
+              <span className="whitespace-nowrap">分享二维码</span>
             </button>
           </div>
         </div>

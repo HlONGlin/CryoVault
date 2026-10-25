@@ -132,15 +132,15 @@ export function UpdateDialog() {
     <>
       {available && (
         <button
-          className="btn-outline flex items-center gap-1.5 px-3 py-1.5 text-xs text-amber-600 hover:text-amber-500 dark:text-amber-300"
+          className="btn-outline flex shrink-0 items-center gap-1.5 px-2 py-1.5 text-xs text-amber-600 hover:text-amber-500 dark:text-amber-300 sm:px-3"
           onClick={() => setOpen(true)}
           title={`发现新版本 ${latest}`}
         >
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
           </span>
-          <ArrowUpCircle className="h-3.5 w-3.5" />
+          <ArrowUpCircle className="h-3.5 w-3.5 shrink-0" />
           <span className="hidden sm:inline">更新 {latest}</span>
         </button>
       )}
@@ -256,9 +256,9 @@ export function UpdateDialog() {
               <div className="mb-1.5 font-semibold text-app-text">更新日志</div>
               <pre
                 ref={logRef}
-                className="h-48 overflow-auto rounded-xl border border-app-border bg-app-bg p-3 font-mono text-[11px] leading-relaxed text-app-muted"
+                className="h-40 overflow-auto rounded-xl border border-app-border bg-app-bg p-3 font-mono text-[11px] leading-relaxed text-app-muted sm:h-48"
               >
-                {logs.length ? logs.join("\n") : "正在启动更新…"}
+                {logs.length ? logs.join("\n") : "正在启动更新..."}
               </pre>
             </div>
           )}

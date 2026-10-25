@@ -117,7 +117,7 @@ export function FileShareDialog({
                 : "扫码后可在任意终端免登录高速预览或下载该文件。"
             }
           />
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border/80 pt-4">
+          <div className="flex flex-col gap-2.5 border-t border-app-border/80 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <span className="text-xs font-medium text-app-muted">
               {share.allow_edit ? (
                 <span className="text-blue-600 dark:text-blue-400">
@@ -129,7 +129,7 @@ export function FileShareDialog({
             </span>
             <div className="flex items-center gap-1.5">
               <button
-                className="btn-outline text-xs"
+                className="btn-outline flex-1 text-xs sm:flex-none"
                 onClick={toggleEdit}
                 disabled={busy}
               >
@@ -142,7 +142,7 @@ export function FileShareDialog({
               </button>
               {revokeShare && (
                 <button
-                  className="btn-danger text-xs"
+                  className="btn-danger flex-1 text-xs sm:flex-none"
                   onClick={revoke}
                   disabled={busy}
                 >

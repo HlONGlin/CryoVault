@@ -78,20 +78,20 @@ export function SharePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Cloudreve Style Share Header Card */}
-      <section className="card relative overflow-hidden bg-app-panel p-5 shadow-sm sm:p-6">
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-400">
-              <FolderOpen className="h-6 w-6" />
+      <section className="card relative overflow-hidden bg-app-panel p-4 shadow-sm sm:p-6">
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 dark:bg-blue-950/40 dark:text-blue-400 sm:h-13 sm:w-13">
+              <FolderOpen className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="shrink-0 rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
                   公开分享
                 </span>
-                <h1 className="truncate text-xl font-bold tracking-tight text-app-text sm:text-2xl">
+                <h1 className="max-w-full truncate text-lg font-bold tracking-tight text-app-text sm:text-2xl">
                   {info.name}
                 </h1>
               </div>
@@ -112,13 +112,13 @@ export function SharePage() {
               {info.allow_edit ? (
                 <>
                   <Pencil className="h-3 w-3" />
-                  可协同编辑文本
+                  可协同编辑文件
                 </>
               ) : (
                 "只读访问"
               )}
             </span>
-            <span className="badge bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+            <span className="badge hidden bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300 sm:inline-flex">
               <Eye className="h-3 w-3" />
               点击文件可直接预览
             </span>

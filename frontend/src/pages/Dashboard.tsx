@@ -93,11 +93,11 @@ export function Dashboard() {
     directSummary.size;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Top Welcome & Actions */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-app-text">
+          <h1 className="text-xl font-bold tracking-tight text-app-text sm:text-2xl">
             文件库概览
           </h1>
           <p className="mt-1 text-sm text-app-muted">
@@ -105,7 +105,7 @@ export function Dashboard() {
           </p>
         </div>
         <button
-          className="btn-primary self-start sm:self-auto"
+          className="btn-primary w-full self-start text-xs sm:w-auto sm:self-auto sm:text-sm"
           onClick={() => setCreateOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -114,7 +114,7 @@ export function Dashboard() {
       </header>
 
       {/* Cloudreve Style 4-Grid Overview Stat Cards */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3.5">
         <StatCard
           label="分组保险库"
           value={String(groups.length)}
@@ -154,7 +154,7 @@ export function Dashboard() {
               {groups.length}
             </span>
           </div>
-          <span className="text-xs text-app-faint">
+          <span className="hidden text-xs text-app-faint sm:inline">
             支持一键生成扫码分享链接
           </span>
         </div>
@@ -164,7 +164,7 @@ export function Dashboard() {
             <Loader2 className="h-6 w-6 animate-spin text-app-accent" />
           </div>
         ) : groups.length === 0 ? (
-          <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-dashed border-app-border bg-app-panel p-8 text-center sm:flex-row sm:text-left">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-app-border bg-app-panel p-6 text-center sm:flex-row sm:justify-between sm:p-8 sm:text-left">
             <div className="flex items-center gap-4">
               <div>
                 <p className="text-sm font-semibold text-app-text">
@@ -175,7 +175,10 @@ export function Dashboard() {
                 </p>
               </div>
             </div>
-            <button className="btn-primary text-xs" onClick={() => setCreateOpen(true)}>
+            <button
+              className="btn-primary w-full text-xs sm:w-auto"
+              onClick={() => setCreateOpen(true)}
+            >
               <Plus className="h-4 w-4" />
               立即创建分组
             </button>
@@ -185,7 +188,7 @@ export function Dashboard() {
             {groups.map((group) => (
               <article
                 key={group.id}
-                className="card card-hover flex min-w-0 flex-col justify-between overflow-hidden bg-app-panel p-4 shadow-sm"
+                className="card card-hover flex min-w-0 flex-col justify-between overflow-hidden bg-app-panel p-3.5 shadow-sm sm:p-4"
               >
                 <div>
                   {/* Card Header: Icon + Title + Count Badge */}
@@ -227,15 +230,15 @@ export function Dashboard() {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="mt-4 flex items-center gap-1.5 border-t border-app-border/80 pt-3">
+                <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-app-border/80 pt-3">
                   <Link
                     to={panelPath(`/groups/${group.id}`)}
-                    className="btn-outline flex-1 text-xs"
+                    className="btn-outline flex-1 basis-32 whitespace-nowrap text-xs"
                   >
                     <span>进入保险库</span>
                   </Link>
                   <button
-                    className="btn-ghost px-2.5 text-xs"
+                    className="btn-ghost flex-1 basis-16 whitespace-nowrap px-2.5 text-xs sm:flex-none"
                     onClick={() => setSharing(group)}
                     title="生成分享二维码"
                     aria-label={`分享分组 ${group.name}`}
@@ -243,7 +246,7 @@ export function Dashboard() {
                     分享
                   </button>
                   <button
-                    className="btn-danger px-2.5 text-xs"
+                    className="btn-danger flex-1 basis-16 whitespace-nowrap px-2.5 text-xs sm:flex-none"
                     onClick={() => removeGroup(group)}
                     title="删除分组"
                     aria-label={`删除分组 ${group.name}`}
@@ -344,14 +347,16 @@ function StatCard({
   suffix?: string;
 }) {
   return (
-    <div className="card bg-app-panel p-4 shadow-sm transition hover:shadow-md">
+    <div className="card bg-app-panel p-3.5 shadow-sm transition hover:shadow-md sm:p-4">
       <div className="min-w-0">
-        <div className="text-xs font-medium text-app-muted">{label}</div>
-        <div className="mt-0.5 truncate text-lg font-bold text-app-text">
+        <div className="truncate text-[11px] font-medium text-app-muted sm:text-xs">
+          {label}
+        </div>
+        <div className="mt-0.5 truncate text-base font-bold text-app-text sm:text-lg">
           {value}
         </div>
         {suffix && (
-          <div className="text-[10px] text-app-faint">{suffix}</div>
+          <div className="truncate text-[10px] text-app-faint">{suffix}</div>
         )}
       </div>
     </div>

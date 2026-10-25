@@ -366,15 +366,15 @@ export function FileBrowser({
   return (
     <div className="space-y-4">
       {/* Top Action Bar (Cloudreve Style Toolbar) */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-app-border bg-app-panel p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2.5 rounded-2xl border border-app-border bg-app-panel p-2.5 shadow-sm sm:gap-3 sm:p-3 lg:flex-row lg:items-center lg:justify-between">
         {/* Category Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="-mx-0.5 flex items-center gap-1.5 overflow-x-auto px-0.5 pb-0.5 scrollbar-none sm:flex-wrap sm:overflow-visible sm:pb-0">
           {FILTERS.map(({ key, label, icon }) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
               className={clsx(
-                "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all",
+                "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all sm:px-3",
                 filter === key
                   ? "bg-blue-50 text-blue-600 shadow-sm ring-1 ring-blue-500/20 dark:bg-blue-950/50 dark:text-blue-300 dark:ring-blue-400/30"
                   : "text-app-muted hover:bg-app-panel2 hover:text-app-text"
@@ -395,10 +395,10 @@ export function FileBrowser({
             </button>
           ))}
           {adapter.remove && sortedFiles.length > 0 && (
-            <label className="ml-1 inline-flex cursor-pointer items-center gap-1.5 border-l border-app-border pl-2 text-xs text-app-muted">
+            <label className="ml-1 inline-flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-app-border pl-2 text-xs text-app-muted">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 accent-[var(--accent)]"
+                className="h-4 w-4 accent-[var(--accent)] sm:h-3.5 sm:w-3.5"
                 checked={
                   sortedFiles.length > 0 &&
                   sortedFiles.every((file) => selectedIds.has(file.id))
@@ -412,7 +412,7 @@ export function FileBrowser({
         </div>
 
         {/* Search, View Mode Toggle, Refresh & Upload */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {selectedIds.size > 0 && adapter.remove && (
             <>
               <span className="text-xs text-app-muted">已选 {selectedIds.size} 个</span>
@@ -435,7 +435,7 @@ export function FileBrowser({
             </button>
           )}
           {/* Search Box */}
-          <div className="relative min-w-[180px] flex-1 sm:w-56 sm:flex-initial">
+          <div className="relative order-first min-w-0 flex-1 basis-full sm:order-none sm:w-56 sm:basis-auto sm:flex-initial">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-faint" />
             <input
               className="input h-9 pl-9 pr-8 text-xs"
@@ -445,7 +445,7 @@ export function FileBrowser({
             />
             {query && (
               <button
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-app-faint hover:text-app-text"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-app-faint hover:text-app-text"
                 onClick={() => setQuery("")}
                 title="清除"
               >
@@ -455,7 +455,7 @@ export function FileBrowser({
           </div>
 
           {/* View Mode Toggle (Grid / List) */}
-          <div className="flex items-center rounded-xl border border-app-border bg-app-panel2 p-0.5">
+          <div className="flex shrink-0 items-center rounded-xl border border-app-border bg-app-panel2 p-0.5">
             <button
               className={clsx(
                 "view-toggle-btn",
@@ -482,7 +482,7 @@ export function FileBrowser({
 
           {/* Refresh Button */}
           <button
-            className="btn-outline h-9 w-9 p-0"
+            className="btn-outline h-9 w-9 shrink-0 p-0"
             onClick={refresh}
             aria-label="刷新"
             title="刷新"
@@ -504,7 +504,7 @@ export function FileBrowser({
                 }}
               />
               <button
-                className="btn-primary h-9 px-3.5 text-xs font-semibold"
+                className="btn-primary h-9 flex-1 px-3.5 text-xs font-semibold sm:flex-none"
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
               >
@@ -608,7 +608,7 @@ export function FileBrowser({
           </div>
         ) : viewMode === "grid" ? (
           /* Grid View (Cloudreve Style Cards) */
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-3.5 md:grid-cols-3 lg:grid-cols-4">
             {sortedFiles.map((file) => (
               <FileCard
                 key={file.id}
@@ -642,7 +642,7 @@ export function FileBrowser({
                 <thead>
                   <tr className="border-b border-app-border bg-app-panel2/60 text-xs font-semibold text-app-muted">
                     <th
-                      className="cursor-pointer py-3 pl-4 pr-3 transition hover:text-app-text"
+                      className="cursor-pointer py-2.5 pl-3 pr-2 transition hover:text-app-text sm:py-3 sm:pl-4 sm:pr-3"
                       onClick={() => handleToggleSort("name")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -659,7 +659,7 @@ export function FileBrowser({
                       </div>
                     </th>
                     <th
-                      className="cursor-pointer px-3 py-3 transition hover:text-app-text"
+                      className="cursor-pointer px-2 py-2.5 transition hover:text-app-text sm:px-3 sm:py-3"
                       onClick={() => handleToggleSort("size")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -693,7 +693,7 @@ export function FileBrowser({
                       </div>
                     </th>
                     <th className="hidden px-3 py-3 md:table-cell">类型</th>
-                    <th className="py-3 pl-3 pr-4 text-right">操作</th>
+                    <th className="py-2.5 pl-2 pr-3 text-right sm:py-3 sm:pl-3 sm:pr-4">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border/60">
@@ -858,7 +858,7 @@ function FileCard({
           type="checkbox"
           checked={selected}
           onChange={onToggleSelect}
-          className="absolute right-2.5 top-2.5 z-20 h-4 w-4 accent-[var(--accent)]"
+          className="absolute right-2 top-2 z-20 h-4 w-4 accent-[var(--accent)] sm:right-2.5 sm:top-2.5"
           aria-label={`选择 ${file.name}`}
         />
       )}
@@ -866,7 +866,7 @@ function FileCard({
       <button
         onClick={onOpen}
         className={clsx(
-          "relative flex h-36 w-full items-center justify-center overflow-hidden border-b border-app-border/80 transition-colors",
+          "relative flex h-24 w-full items-center justify-center overflow-hidden border-b border-app-border/80 transition-colors sm:h-36",
           visuals.bgColor
         )}
         title={`打开预览: ${file.name}`}
@@ -879,21 +879,21 @@ function FileCard({
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-1.5 sm:gap-2">
             <div
               className={clsx(
-                "flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm transition-transform duration-300 group-hover:scale-110",
+                "flex h-10 w-10 items-center justify-center rounded-xl shadow-sm transition-transform duration-300 group-hover:scale-110 sm:h-14 sm:w-14 sm:rounded-2xl",
                 visuals.bgColor,
                 visuals.color,
                 "border",
                 visuals.borderColor
               )}
             >
-              <FileIcon file={file} className="h-7 w-7" />
+              <FileIcon file={file} className="h-5 w-5 sm:h-7 sm:w-7" />
             </div>
             <span
               className={clsx(
-                "rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider",
+                "rounded-md px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-wider sm:px-2 sm:text-[10px]",
                 visuals.badgeBg
               )}
             >
@@ -905,7 +905,7 @@ function FileCard({
         {/* Quick Kind Tag Badge */}
         <span
           className={clsx(
-            "badge absolute left-2.5 top-2.5 shadow-sm backdrop-blur",
+            "badge absolute left-2 top-2 shadow-sm backdrop-blur sm:left-2.5 sm:top-2.5",
             visuals.badgeBg
           )}
         >
@@ -914,28 +914,30 @@ function FileCard({
       </button>
 
       {/* Meta Information */}
-      <div className="flex flex-1 flex-col justify-between p-3.5">
+      <div className="flex flex-1 flex-col justify-between p-2.5 sm:p-3.5">
         <div>
           <button
             onClick={onOpen}
             className="w-full text-left"
             title={file.name}
           >
-            <h4 className="line-clamp-1 break-all text-sm font-semibold text-app-text transition-colors group-hover:text-app-accent">
+            <h4 className="line-clamp-1 break-all text-xs font-semibold text-app-text transition-colors group-hover:text-app-accent sm:text-sm">
               {file.name}
             </h4>
           </button>
-          <div className="mt-1 flex items-center justify-between text-xs text-app-faint">
-            <span className="font-mono">{formatBytes(file.size)}</span>
-            <span>{formatDate(file.updated_at).split(" ")[0]}</span>
+          <div className="mt-1 flex items-center justify-between gap-1.5 text-[11px] text-app-faint sm:text-xs">
+            <span className="truncate font-mono">{formatBytes(file.size)}</span>
+            <span className="shrink-0">
+              {formatDate(file.updated_at).split(" ")[0]}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Action Toolbar on Bottom */}
-      <div className="flex items-center gap-1 border-t border-app-border/70 bg-app-panel2/40 px-2 py-1.5 transition-colors">
+      <div className="flex flex-wrap items-center gap-0.5 border-t border-app-border/70 bg-app-panel2/40 px-1.5 py-1 transition-colors sm:flex-nowrap sm:gap-1 sm:px-2 sm:py-1.5">
         <button
-          className="btn-ghost h-8 w-8 p-0"
+          className="btn-ghost h-8 w-8 shrink-0 p-0"
           onClick={onOpen}
           title={file.kind === "text" ? "编辑文件" : "查看预览"}
         >
@@ -946,7 +948,7 @@ function FileCard({
           )}
         </button>
         <button
-          className="btn-ghost h-8 w-8 p-0"
+          className="btn-ghost h-8 w-8 shrink-0 p-0"
           onClick={onDownload}
           title="下载到本地"
         >
@@ -954,7 +956,7 @@ function FileCard({
         </button>
         {onShare && (
           <button
-            className="btn-ghost h-8 w-8 p-0"
+            className="btn-ghost h-8 w-8 shrink-0 p-0"
             onClick={onShare}
             title="生成单文件链接与二维码"
           >
@@ -963,17 +965,17 @@ function FileCard({
         )}
         {onRename && (
           <button
-            className="btn-ghost h-8 w-8 p-0"
+            className="btn-ghost h-8 w-8 shrink-0 p-0"
             onClick={onRename}
             title="重命名"
           >
             <TextCursorInput className="h-3.5 w-3.5" />
           </button>
         )}
-        <div className="flex-1" />
+        <div className="hidden flex-1 sm:block" />
         {onDelete && (
           <button
-            className="btn-danger h-8 w-8 p-0"
+            className="btn-danger h-8 w-8 shrink-0 p-0"
             onClick={onDelete}
             title="删除文件"
           >
@@ -1004,25 +1006,25 @@ function FileListRow({
   return (
     <tr className="group transition-colors hover:bg-app-panel2/50">
       {/* File Name & Icon */}
-      <td className="py-2.5 pl-4 pr-3">
-        <div className="flex items-center gap-3">
+      <td className="py-2 pl-3 pr-2 sm:py-2.5 sm:pl-4 sm:pr-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {onToggleSelect && (
             <input
               type="checkbox"
               checked={selected}
               onChange={onToggleSelect}
-              className="h-4 w-4 accent-[var(--accent)]"
+              className="h-4 w-4 shrink-0 accent-[var(--accent)]"
               aria-label={`选择 ${file.name}`}
             />
           )}
           <button
             onClick={onOpen}
-            className="flex min-w-0 items-center gap-3 text-left transition group-hover:text-app-accent"
+            className="flex min-w-0 items-center gap-2 text-left transition group-hover:text-app-accent sm:gap-3"
             title={file.name}
           >
             <div
               className={clsx(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border sm:h-8 sm:w-8",
                 visuals.bgColor,
                 visuals.color,
                 visuals.borderColor
@@ -1030,7 +1032,7 @@ function FileListRow({
             >
               <FileIcon file={file} className="h-4 w-4" />
             </div>
-            <span className="line-clamp-1 max-w-[260px] font-medium text-app-text transition group-hover:text-app-accent sm:max-w-md md:max-w-lg">
+            <span className="line-clamp-1 max-w-[42vw] break-all font-medium text-app-text transition group-hover:text-app-accent sm:max-w-[280px] md:max-w-lg">
               {file.name}
             </span>
           </button>
@@ -1038,7 +1040,7 @@ function FileListRow({
       </td>
 
       {/* File Size */}
-      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-app-muted">
+      <td className="whitespace-nowrap px-2 py-2 font-mono text-[11px] text-app-muted sm:px-3 sm:py-2.5 sm:text-xs">
         {formatBytes(file.size)}
       </td>
 
@@ -1060,10 +1062,10 @@ function FileListRow({
       </td>
 
       {/* Actions */}
-      <td className="py-2.5 pl-3 pr-4 text-right">
-        <div className="flex items-center justify-end gap-1">
+      <td className="py-2 pl-2 pr-3 text-right sm:py-2.5 sm:pl-3 sm:pr-4">
+        <div className="flex items-center justify-end gap-0.5 sm:gap-1">
           <button
-            className="btn-ghost h-8 w-8 p-0"
+            className="btn-ghost h-8 w-8 shrink-0 p-0"
             onClick={onOpen}
             title={file.kind === "text" ? "编辑文件" : "查看预览"}
           >
@@ -1074,7 +1076,7 @@ function FileListRow({
             )}
           </button>
           <button
-            className="btn-ghost h-8 w-8 p-0"
+            className="btn-ghost h-8 w-8 shrink-0 p-0"
             onClick={onDownload}
             title="下载"
           >
@@ -1082,7 +1084,7 @@ function FileListRow({
           </button>
           {onShare && (
             <button
-              className="btn-ghost h-8 w-8 p-0"
+              className="btn-ghost hidden h-8 w-8 shrink-0 p-0 sm:inline-flex"
               onClick={onShare}
               title="分享"
             >
@@ -1091,7 +1093,7 @@ function FileListRow({
           )}
           {onRename && (
             <button
-              className="btn-ghost h-8 w-8 p-0"
+              className="btn-ghost hidden h-8 w-8 shrink-0 p-0 sm:inline-flex"
               onClick={onRename}
               title="重命名"
             >
@@ -1100,7 +1102,7 @@ function FileListRow({
           )}
           {onDelete && (
             <button
-              className="btn-danger h-8 w-8 p-0"
+              className="btn-danger h-8 w-8 shrink-0 p-0"
               onClick={onDelete}
               title="删除"
             >

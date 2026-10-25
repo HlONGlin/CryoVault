@@ -61,6 +61,11 @@ body,
   height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   color: var(--text);
@@ -106,6 +111,54 @@ body {
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  /* Breathing room for notched phones in standalone/fullscreen mode */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Horizontal snap scrolling for filter pill rows on narrow screens */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Fingers need bigger hit areas than a mouse cursor */
+  .btn {
+    min-height: 2.25rem;
+  }
+
+  .btn-ghost.btn-icon,
+  .btn-outline.btn-icon,
+  .btn-danger.btn-icon {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
   }
 }
 

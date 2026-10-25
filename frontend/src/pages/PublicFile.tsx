@@ -120,29 +120,29 @@ export function PublicFile() {
   const visuals = getFileVisuals(file);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Cloudreve Style Public File Hero */}
-      <section className="card relative overflow-hidden bg-app-panel p-5 shadow-sm sm:p-6">
+      <section className="card relative overflow-hidden bg-app-panel p-4 shadow-sm sm:p-6">
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
             <div
-              className={`flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl border shadow-sm ${visuals.bgColor} ${visuals.color} ${visuals.borderColor}`}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-sm sm:h-13 sm:w-13 ${visuals.bgColor} ${visuals.color} ${visuals.borderColor}`}
             >
-              <FileIcon file={file} className="h-6 w-6" />
+              <FileIcon file={file} className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
-                  单文件直连
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="shrink-0 rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-300">
+                  单文件直链
                 </span>
                 <span className={`badge ${visuals.badgeBg}`}>
                   {visuals.label}
                 </span>
               </div>
-              <h1 className="mt-1 break-all text-xl font-bold tracking-tight text-app-text sm:text-2xl">
+              <h1 className="mt-1 break-all text-lg font-bold tracking-tight text-app-text sm:text-2xl">
                 {file.name}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs sm:gap-2">
                 <span className="chip font-mono">{formatBytes(file.size)}</span>
                 <span className="chip">{formatDate(file.updated_at)}</span>
                 <span
@@ -155,7 +155,7 @@ export function PublicFile() {
           </div>
 
           <a
-            className="btn-primary h-10 px-4 text-xs font-semibold shrink-0 self-start sm:self-auto"
+            className="btn-primary h-10 w-full shrink-0 justify-center px-4 text-xs font-semibold sm:w-auto sm:self-auto"
             href={urls.fileShareDownload(token)}
             download
           >
@@ -197,7 +197,7 @@ export function PublicFile() {
                 className="text-xs sm:text-sm"
               />
               {allow_edit && (
-                <div className="flex items-center justify-between border-t border-app-border bg-app-panel2/50 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-app-border bg-app-panel2/50 px-3 py-2.5 pb-safe sm:flex-nowrap sm:px-4 sm:py-3">
                   <span className="text-xs text-app-muted">
                     {saveMessage ? (
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">
@@ -269,20 +269,20 @@ export function PublicFile() {
           </div>
         </div>
       ) : (
-        <div className="card flex flex-col items-center gap-4 p-12 text-center bg-app-panel shadow-sm">
+        <div className="card flex flex-col items-center gap-4 bg-app-panel p-8 text-center shadow-sm sm:p-12">
           <div
             className={`flex h-16 w-16 items-center justify-center rounded-2xl border shadow-sm ${visuals.bgColor} ${visuals.color} ${visuals.borderColor}`}
           >
             <FileIcon file={file} className="h-8 w-8" />
           </div>
           <div>
-            <p className="text-base font-semibold text-app-text">{file.name}</p>
+            <p className="break-all text-base font-semibold text-app-text">{file.name}</p>
             <p className="mt-1 text-xs text-app-muted">
               该文件格式暂不支持浏览器在线直接预览，可直接下载至本地查看。
             </p>
           </div>
           <a
-            className="btn-primary mt-2 text-xs"
+            className="btn-primary mt-2 w-full justify-center text-xs sm:w-auto"
             href={urls.fileShareDownload(token)}
             download
           >
