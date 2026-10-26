@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     # Optional token to lift the anonymous GitHub API rate limit.
     github_token: str = ""
 
+    # --- WebDAV bidirectional synchronization ------------------------
+    # Credentials stay on the server and are never returned by the API.
+    webdav_enabled: bool = False
+    webdav_url: str = ""
+    webdav_username: str = ""
+    webdav_password: str = ""
+    webdav_root: str = "/CryoVault"
+    webdav_interval_seconds: int = 900
+    webdav_conflict_policy: str = "keep_both"
+    webdav_verify_tls: bool = True
+    webdav_timeout: float = 60.0
+
     @property
     def normalized_panel_path(self) -> str:
         """Panel path with a leading slash, sanitized and without trailing slash."""

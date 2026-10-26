@@ -9,13 +9,16 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import settings
 from .database import init_db
-from .routers import admin, direct, file_share, files, groups, share, update
+from .routers import admin, direct, file_share, files, groups, share, sync, update
+from .webdav import sync_scheduler
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    sync_scheduler.start()
     yield
+    sync_scheduler.stop()
 
 
 _docs = settings.docs_enabled
@@ -44,6 +47,7 @@ app.include_router(files.router)
 app.include_router(share.router)
 app.include_router(file_share.router)
 app.include_router(direct.router)
+app.include_router(sync.router)
 app.include_router(update.router)
 
 

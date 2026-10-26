@@ -72,6 +72,29 @@ export type UpdateEvent =
   | { event: "done"; changed?: boolean; version?: string; restarted?: boolean; log?: string }
   | { event: "error"; message: string };
 
+export interface SyncReport {
+  uploaded: number;
+  downloaded: number;
+  deleted_local: number;
+  deleted_remote: number;
+  renamed: number;
+  conflicts: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface SyncStatus {
+  configured: boolean;
+  enabled: boolean;
+  running: boolean;
+  interval_seconds: number;
+  conflict_policy: string;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_report: SyncReport | null;
+  last_error: string | null;
+}
+
 const LEGACY_TOKEN_KEY = "cryovault.adminToken";
 
 /** Remove the legacy localStorage token left by older versions. */
@@ -181,6 +204,10 @@ export const adminApi = {
       headers: { "X-Admin-Token": token },
     }),
   logout: () => request<{ ok: boolean }>("/admin/session", { method: "DELETE" }),
+
+  syncStatus: () => request<SyncStatus>("/admin/sync/status"),
+  testSyncConnection: () => request<{ ok: boolean }>("/admin/sync/test", { method: "POST" }),
+  runSync: () => request<{ ok: boolean; report: SyncReport }>("/admin/sync/run", { method: "POST" }),
 
   listGroups: () => request<Group[]>("/groups"),
   createGroup: (payload: { name: string; description?: string; allow_edit?: boolean }) =>

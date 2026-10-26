@@ -26,6 +26,8 @@ def main() -> None:
         client.get("/api/admin/status").json()["auth_required"] is False,
     )
     check("verify token", client.get("/api/admin/verify").status_code == 200)
+    sync_status = client.get("/api/admin/sync/status").json()
+    check("sync status", sync_status["configured"] is False and sync_status["running"] is False)
 
     group = client.post(
         "/api/groups", json={"name": "demo", "description": "smoke", "allow_edit": True}

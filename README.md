@@ -232,6 +232,26 @@ npm run dev -- --host 0.0.0.0
 
 分享页面使用 `/s/<token>`，单文件页面使用 `/f/<token>`。两类公开页面都不需要管理员令牌。
 
+## WebDAV 双向同步
+
+CryoVault 支持通过 WebDAV 与 Nextcloud、坚果云等服务进行双向同步。同步凭据只在后端读取，管理页面不会显示密码。
+
+在 `backend/.env` 中配置：
+
+```dotenv
+CRYOVAULT_WEBDAV_ENABLED=true
+CRYOVAULT_WEBDAV_URL=https://cloud.example.com/remote.php/dav/files/user
+CRYOVAULT_WEBDAV_USERNAME=user
+CRYOVAULT_WEBDAV_PASSWORD=应用专用密码
+CRYOVAULT_WEBDAV_ROOT=/CryoVault
+CRYOVAULT_WEBDAV_INTERVAL_SECONDS=900
+CRYOVAULT_WEBDAV_CONFLICT_POLICY=keep_both
+```
+
+远端文件按 `groups/<分组 ID>/<文件 ID>-<文件名>` 保存。首次同步时，远端和本地同时存在的文件按修改时间决定来源；之后会同步新增、修改、删除和重命名。
+
+冲突策略支持 `keep_both`（保留远端版本为本地冲突副本）、`local_wins` 和 `remote_wins`。管理面板中的 WebDAV 卡片可以测试连接或立即同步；接口为 `GET /api/admin/sync/status`、`POST /api/admin/sync/test` 和 `POST /api/admin/sync/run`。
+
 ## 配置项
 
 开发模式通常使用 `backend/.env`。所有环境变量均使用 `CRYOVAULT_` 前缀。
@@ -258,7 +278,15 @@ npm run dev -- --host 0.0.0.0
 | `CRYOVAULT_UPDATE_BRANCH` | `main` | 没有 GitHub Release 时读取 `VERSION` 的分支 |
 | `CRYOVAULT_UPDATE_CHECK_TIMEOUT` | `6` | 访问 GitHub 的超时时间，单位为秒 |
 | `CRYOVAULT_GITHUB_TOKEN` | 空 | 可选，用于提高 GitHub API 匿名请求限额 |
-
+| `CRYOVAULT_WEBDAV_ENABLED` | `false` | 是否开启双向 WebDAV 自动同步 |
+| `CRYOVAULT_WEBDAV_URL` | 空 | WebDAV 服务地址，例如 Nextcloud 的远程文件地址 |
+| `CRYOVAULT_WEBDAV_USERNAME` | 空 | WebDAV 用户名 |
+| `CRYOVAULT_WEBDAV_PASSWORD` | 空 | WebDAV 密码或应用密码，仅在服务端环境中设置 |
+| `CRYOVAULT_WEBDAV_ROOT` | `/CryoVault` | 远程文件夹根路径 |
+| `CRYOVAULT_WEBDAV_INTERVAL_SECONDS` | `900` | 自动同步间隔，单位为秒；设置为 `0` 可关闭调度 |
+| `CRYOVAULT_WEBDAV_CONFLICT_POLICY` | `keep_both` | 冲突策略：`keep_both`、`local_wins` 或 `remote_wins` |
+| `CRYOVAULT_WEBDAV_VERIFY_TLS` | `true` | 是否验证 WebDAV HTTPS 证书 |
+| `CRYOVAULT_WEBDAV_TIMEOUT` | `60` | 单次 WebDAV 请求超时，单位为秒 |
 > `CRYOVAULT_UPDATE_COMMAND` 只允许指向安装目录内的脚本，且只接受 `--port`、`--panel-path` 两个参数，脚本必须包含 `--update-only` 入口，避免该配置被用来执行任意命令。在线更新要求 CryoVault 服务以 root 运行（一键脚本生成的 systemd 单元不再指定 `User=`），因为安装过程需要写入 `/opt/cryovault`、安装系统软件包并重启服务。若服务以普通用户运行，更新对话框会直接提示如何修改 systemd 单元；在禁止提权的容器（`no_new_privs`）中请改为在宿主机执行 `sudo bash /opt/cryovault/one-click.sh --update-only`。
 
 生产环境至少应设置：
