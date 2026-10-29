@@ -236,6 +236,8 @@ npm run dev -- --host 0.0.0.0
 
 CryoVault 支持通过 WebDAV 与 Nextcloud、坚果云等服务进行双向同步。同步凭据只在后端读取，管理页面不会显示密码。
 
+WebDAV 密码使用数据目录中的 `.webdav-settings.key` 加密；备份时请连同数据目录一起保留该密钥，若丢失则需重新输入密码。
+
 在 `backend/.env` 中配置：
 
 ```dotenv
@@ -251,6 +253,8 @@ CRYOVAULT_WEBDAV_CONFLICT_POLICY=keep_both
 远端文件按 `groups/<分组 ID>/<文件 ID>-<文件名>` 保存。首次同步时，远端和本地同时存在的文件按修改时间决定来源；之后会同步新增、修改、删除和重命名。
 
 冲突策略支持 `keep_both`（保留远端版本为本地冲突副本）、`local_wins` 和 `remote_wins`。管理面板中的 WebDAV 卡片可以测试连接或立即同步；接口为 `GET /api/admin/sync/status`、`POST /api/admin/sync/test` 和 `POST /api/admin/sync/run`。
+
+直链导入位于管理首页“直接上传”区域。系统仅允许从可公开访问的 HTTP/HTTPS 地址下载，并遵守 `CRYOVAULT_MAX_UPLOAD_SIZE` 限制；文件默认进入单文件分享区。
 
 ## 配置项
 

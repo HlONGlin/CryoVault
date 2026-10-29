@@ -8,14 +8,16 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import settings
-from .database import init_db
+from .database import SessionLocal, init_db
 from .routers import admin, direct, file_share, files, groups, share, sync, update
+from .settings_store import load_saved_settings
 from .webdav import sync_scheduler
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    load_saved_settings(SessionLocal)
     sync_scheduler.start()
     yield
     sync_scheduler.stop()

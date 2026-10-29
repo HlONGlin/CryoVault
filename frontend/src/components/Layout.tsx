@@ -1,6 +1,7 @@
 import {
   LockKeyhole,
   Moon,
+  Settings,
   ShieldCheck,
   Sun,
 } from "lucide-react";
@@ -60,6 +61,17 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {!isPublic && <UpdateDialog />}
+            {!isPublic && unlocked && (
+              <Link
+                to={panelPath("/settings")}
+                className={`btn-ghost flex items-center gap-1.5 px-2.5 py-1.5 text-xs ${pathname.endsWith("/settings") ? "text-app-accent" : "text-app-muted"}`}
+                title="设置"
+                aria-label="设置"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">设置</span>
+              </Link>
+            )}
             <button
               className="btn-ghost rounded-xl p-2.5 text-app-muted hover:text-app-text"
               onClick={toggle}

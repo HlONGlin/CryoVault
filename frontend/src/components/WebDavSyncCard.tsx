@@ -75,8 +75,12 @@ export function WebDavSyncCard() {
             <h2 className="text-sm font-bold text-app-text">WebDAV 双向同步</h2>
             <p className="mt-1 text-xs text-app-muted">
               {status.configured
-                ? `已配置 · 每 ${Math.max(1, Math.round(status.interval_seconds / 60))} 分钟自动同步`
-                : "尚未配置，请在服务端 .env 设置 WebDAV 地址和凭据"}
+                ? status.enabled
+                  ? status.interval_seconds > 0
+                    ? `已启用 · 每 ${Math.max(1, Math.round(status.interval_seconds / 60))} 分钟自动同步`
+                    : "连接已启用，定时同步已暂停"
+                  : "连接参数已保存，自动同步已暂停"
+                : "尚未配置，请填写 WebDAV 地址、用户名和密码"}
             </p>
           </div>
         </div>

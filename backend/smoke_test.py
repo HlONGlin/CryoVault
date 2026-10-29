@@ -1,6 +1,7 @@
 """End-to-end smoke test. Run with: python smoke_test.py"""
 import os
 import tempfile
+from unittest.mock import patch
 from pathlib import Path
 
 os.environ.setdefault("CRYOVAULT_DATA_DIR", tempfile.mkdtemp(prefix="cryovault-test-"))
@@ -28,7 +29,40 @@ def main() -> None:
     check("verify token", client.get("/api/admin/verify").status_code == 200)
     sync_status = client.get("/api/admin/sync/status").json()
     check("sync status", sync_status["configured"] is False and sync_status["running"] is False)
+    settings_response = client.put(
+        "/api/admin/sync/settings",
+        json={
+            "enabled": False,
+            "url": "https://cloud.example.test/dav",
+            "username": "sync-user",
+            "password": "private-test-secret",
+            "root": "/CryoVault",
+            "interval_seconds": 900,
+            "conflict_policy": "keep_both",
+            "verify_tls": True,
+            "timeout": 60,
+        },
+    )
+    check(
+        "webdav settings saved without returning secret",
+        settings_response.status_code == 200
+        and settings_response.json()["password_configured"] is True
+        and "private-test-secret" not in settings_response.text,
+    )
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.settings_store import load_saved_settings
 
+    settings.webdav_password = ""
+    load_saved_settings(SessionLocal)
+    check("webdav settings survive reload", settings.webdav_password == "private-test-secret")
+    check(
+        "private direct link rejected",
+        client.post(
+            "/api/direct/import", json={"url": "http://127.0.0.1/private"}
+        ).status_code
+        == 400,
+    )
     group = client.post(
         "/api/groups", json={"name": "demo", "description": "smoke", "allow_edit": True}
     ).json()
@@ -91,6 +125,7 @@ def main() -> None:
         "system group hidden",
         all(g["name"] != "单文件分享" for g in client.get("/api/groups").json()),
     )
+    check_direct_link_import()
 
     client.delete(f"/api/files/{yaml_file['id']}/share")
     check(
@@ -218,6 +253,44 @@ def check_login_rate_limit() -> None:
         login_limiter.reset(key)
         settings.admin_token = previous_token
         client.cookies.clear()
+
+
+def check_direct_link_import() -> None:
+    import httpx
+
+    from app.routers import direct
+
+    original_client = httpx.Client
+
+    def mocked_client(**kwargs):
+        transport = httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                headers={
+                    "content-type": "text/plain",
+                    "content-disposition": 'attachment; filename="from-link.txt"',
+                },
+                content=b"imported from link",
+            )
+        )
+        return original_client(transport=transport, **kwargs)
+
+    with patch.object(
+        direct.socket,
+        "getaddrinfo",
+        return_value=[(2, 1, 6, "", ("8.8.8.8", 443))],
+    ), patch.object(direct.httpx, "Client", side_effect=mocked_client):
+        response = client.post(
+            "/api/direct/import", json={"url": "https://public.example/from-link.txt"}
+        )
+    item = response.json()
+    check(
+        "direct link import",
+        response.status_code == 201
+        and item["name"] == "from-link.txt"
+        and client.get(f"/api/files/{item['id']}/download").content
+        == b"imported from link",
+    )
 
 
 def check_text_limits() -> None:

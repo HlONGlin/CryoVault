@@ -7,7 +7,6 @@ import { panelPath } from "../base";
 import { DirectFilesSection } from "../components/DirectFilesSection";
 import { Modal } from "../components/Modal";
 import { ShareDialog } from "../components/ShareDialog";
-import { WebDavSyncCard } from "../components/WebDavSyncCard";
 import { formatBytes, formatDate } from "../lib/format";
 
 export function Dashboard() {
@@ -143,8 +142,6 @@ export function Dashboard() {
           {error}
         </div>
       )}
-
-      <WebDavSyncCard />
 
       {/* Vault Groups Section */}
       <section className="space-y-4" aria-labelledby="groups-heading">

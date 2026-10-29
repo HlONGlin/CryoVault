@@ -1,4 +1,5 @@
 import uuid
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -104,6 +105,37 @@ def save_upload(db: Session, group: Group, upload: UploadFile) -> FileItem:
         stored_name=stored_name,
         size=size,
         mime_type=upload.content_type or "application/octet-stream",
+    )
+    db.add(file)
+    db.commit()
+    db.refresh(file)
+    return file
+
+
+def save_path(
+    db: Session,
+    group: Group,
+    source: Path,
+    name: str,
+    mime_type: str = "application/octet-stream",
+) -> FileItem:
+    size = source.stat().st_size
+    if settings.max_upload_size and size > settings.max_upload_size:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "File exceeds the configured upload limit",
+        )
+    raw_name = (name or "untitled").replace("\\", "/")
+    original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
+    stored_name = uuid.uuid4().hex
+    destination = settings.storage_dir / stored_name
+    shutil.move(str(source), str(destination))
+    file = FileItem(
+        group_id=group.id,
+        name=original_name,
+        stored_name=stored_name,
+        size=size,
+        mime_type=mime_type or "application/octet-stream",
     )
     db.add(file)
     db.commit()

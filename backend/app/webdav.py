@@ -316,7 +316,11 @@ def _split_remote_path(path: str) -> tuple[int, str] | None:
         group_id = int(parts[1])
     except ValueError:
         return None
-    return group_id, parts[2]
+    name = parts[2]
+    file_id, separator, original_name = name.partition("-")
+    if separator and file_id.isdigit() and original_name:
+        name = original_name
+    return group_id, name
 
 
 def _conflict_name(name: str) -> str:
@@ -360,8 +364,7 @@ class SyncEngine:
 
     def configured(self) -> bool:
         return bool(
-            settings.webdav_enabled
-            and settings.webdav_url.strip()
+            settings.webdav_url.strip()
             and settings.webdav_username
             and settings.webdav_password
         )
@@ -683,6 +686,11 @@ class SyncScheduler:
         self.stop_event.set()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=5)
+
+    def restart(self) -> None:
+        self.stop()
+        self.thread = None
+        self.start()
 
     def _loop(self) -> None:
         while not self.stop_event.wait(max(10, settings.webdav_interval_seconds)):

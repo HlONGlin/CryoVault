@@ -99,3 +99,18 @@ class SyncState(Base):
     last_synced_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class WebDavSettings(Base):
+    __tablename__ = "webdav_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    url: Mapped[str] = mapped_column(Text, default="")
+    username: Mapped[str] = mapped_column(String(512), default="")
+    password_encrypted: Mapped[str] = mapped_column(Text, default="")
+    root: Mapped[str] = mapped_column(String(1024), default="/CryoVault")
+    interval_seconds: Mapped[int] = mapped_column(Integer, default=900)
+    conflict_policy: Mapped[str] = mapped_column(String(32), default="keep_both")
+    verify_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    timeout: Mapped[int] = mapped_column(Integer, default=60)

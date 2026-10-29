@@ -95,6 +95,18 @@ export interface SyncStatus {
   last_error: string | null;
 }
 
+export interface WebDavSettings {
+  enabled: boolean;
+  url: string;
+  username: string;
+  password_configured: boolean;
+  root: string;
+  interval_seconds: number;
+  conflict_policy: "keep_both" | "local_wins" | "remote_wins";
+  verify_tls: boolean;
+  timeout: number;
+}
+
 const LEGACY_TOKEN_KEY = "cryovault.adminToken";
 
 /** Remove the legacy localStorage token left by older versions. */
@@ -206,6 +218,9 @@ export const adminApi = {
   logout: () => request<{ ok: boolean }>("/admin/session", { method: "DELETE" }),
 
   syncStatus: () => request<SyncStatus>("/admin/sync/status"),
+  getWebDavSettings: () => request<WebDavSettings>("/admin/sync/settings"),
+  saveWebDavSettings: (payload: WebDavSettings & { password?: string; clear_password?: boolean }) =>
+    request<WebDavSettings>("/admin/sync/settings", { method: "PUT", body: JSON.stringify(payload) }),
   testSyncConnection: () => request<{ ok: boolean }>("/admin/sync/test", { method: "POST" }),
   runSync: () => request<{ ok: boolean; report: SyncReport }>("/admin/sync/run", { method: "POST" }),
 
@@ -284,6 +299,8 @@ export const adminApi = {
     onProgress?: (percent: number) => void,
     signal?: AbortSignal
   ) => uploadWithProgress<FileItem[]>("/direct/files", files, onProgress, signal),
+  importDirectLink: (url: string, name = "") =>
+    request<FileItem>("/direct/import", { method: "POST", body: JSON.stringify({ url, name }) }),
 
   checkUpdate: (force = false) =>
     request<UpdateInfo>(`/admin/update${force ? "?force=true" : ""}`),

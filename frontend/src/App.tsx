@@ -24,6 +24,9 @@ const PublicFile = lazy(() =>
 const SharePage = lazy(() =>
   import("./pages/SharePage").then((m) => ({ default: m.SharePage }))
 );
+const Settings = lazy(() =>
+  import("./pages/Settings").then((m) => ({ default: m.Settings }))
+);
 
 function PageLoader() {
   return (
@@ -50,6 +53,14 @@ function AdminRoutes() {
         element={
           <RequireAuth>
             <GroupDetail />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="settings"
+        element={
+          <RequireAuth>
+            <Settings />
           </RequireAuth>
         }
       />
