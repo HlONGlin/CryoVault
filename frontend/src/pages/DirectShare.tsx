@@ -13,7 +13,7 @@ export function DirectShare() {
       rawUrl: (f) => urls.adminRaw(f.id),
       downloadUrl: (f) => urls.adminDownload(f.id),
       getContent: (f) => adminApi.getContent(f.id),
-      saveContent: (f, content) => adminApi.saveContent(f.id, content),
+      saveContent: (f, content, etag) => adminApi.saveContent(f.id, content, etag),
       remove: (f) => adminApi.deleteFile(f.id),
       rename: (f, newName) => adminApi.renameFile(f.id, newName),
       upload: (files) => adminApi.uploadDirectFiles(files),

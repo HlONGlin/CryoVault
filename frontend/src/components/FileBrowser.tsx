@@ -53,7 +53,7 @@ export interface BrowserAdapter {
   rawUrl: (file: FileItem) => string;
   downloadUrl: (file: FileItem) => string;
   getContent: (file: FileItem) => Promise<TextContent>;
-  saveContent?: (file: FileItem, content: string) => Promise<unknown>;
+  saveContent?: (file: FileItem, content: string, etag: string) => Promise<TextContent>;
   remove?: (file: FileItem) => Promise<unknown>;
   rename?: (file: FileItem, name: string) => Promise<unknown>;
   upload?: (

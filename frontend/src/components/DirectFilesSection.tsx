@@ -21,7 +21,7 @@ export function DirectFilesSection({
       rawUrl: (file) => urls.adminRaw(file.id),
       downloadUrl: (file) => urls.adminDownload(file.id),
       getContent: (file) => adminApi.getContent(file.id),
-      saveContent: (file, content) => adminApi.saveContent(file.id, content),
+      saveContent: (file, content, etag) => adminApi.saveContent(file.id, content, etag),
       remove: (file) => adminApi.deleteFile(file.id),
       downloadArchive: (files) => adminApi.downloadArchive(files.map((file) => file.id)),
       rename: (file, newName) => adminApi.renameFile(file.id, newName),

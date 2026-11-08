@@ -41,7 +41,7 @@ export function SharePage() {
       downloadUrl: (file) => urls.shareDownload(token, file.id),
       getContent: (file) => shareApi.getContent(token, file.id),
       saveContent: info?.allow_edit
-        ? (file, content) => shareApi.saveContent(token, file.id, content)
+        ? (file, content, etag) => shareApi.saveContent(token, file.id, content, etag)
         : undefined,
     }),
     [info?.allow_edit, token]

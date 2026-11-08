@@ -250,6 +250,10 @@ def migrate() -> None:
             current = _ensure_schema_version(connection)
             if current < 1:
                 _migrate_v1(connection)
+            elif current == 1 and not _table_exists(connection, "legacy_group_folders"):
+                raise RuntimeError(
+                    "Incomplete v1 migration detected; restore the pre-migration backup before upgrading"
+                )
             if current < 2:
                 _migrate_v2(connection)
             if connection.exec_driver_sql("PRAGMA foreign_key_check").first():

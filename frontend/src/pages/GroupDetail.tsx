@@ -62,7 +62,7 @@ export function GroupDetail() {
       rawUrl: (f) => urls.adminRaw(f.id),
       downloadUrl: (f) => urls.adminDownload(f.id),
       getContent: (f) => adminApi.getContent(f.id),
-      saveContent: (f, content) => adminApi.saveContent(f.id, content),
+      saveContent: (f, content, etag) => adminApi.saveContent(f.id, content, etag),
       remove: (f) => adminApi.deleteFile(f.id),
       downloadArchive: (files) =>
         adminApi.downloadArchive(files.map((file) => file.id)),

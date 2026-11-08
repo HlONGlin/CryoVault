@@ -1,15 +1,18 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from . import __version__
 from .config import settings
-from .database import SessionLocal, init_db
-from .routers import admin, direct, file_share, files, groups, share, sync, update
+from .database import SessionLocal, get_db, init_db
+from .deps import require_admin
+from .models import FileItem
+from .routers import admin, direct, file_share, files, folders, groups, share, shares, sync, update
 from .settings_store import load_saved_settings
 from .webdav import sync_scheduler
 
@@ -45,9 +48,12 @@ if settings.cors_origins:
 
 app.include_router(admin.router)
 app.include_router(groups.router)
+app.include_router(folders.router)
 app.include_router(files.router)
 app.include_router(share.router)
 app.include_router(file_share.router)
+app.include_router(shares.admin_router)
+app.include_router(shares.public_router)
 app.include_router(direct.router)
 app.include_router(sync.router)
 app.include_router(update.router)
@@ -67,18 +73,33 @@ def health():
     return {"status": "ok", "name": settings.app_name, "version": __version__}
 
 
+@app.get("/api/stats", dependencies=[Depends(require_admin)])
+def stats(db: Session = Depends(get_db)):
+    count, size = db.query(
+        func.count(FileItem.id), func.coalesce(func.sum(FileItem.size), 0)
+    ).one()
+    return {"file_count": count, "total_size": size}
+
+
 # Optionally serve the built frontend (frontend/dist) for single-service deployment.
 _dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 _dist_root = _dist.resolve()
 _PANEL_PLACEHOLDER = "__CRYOVAULT_PANEL_BASE__"
 _PUBLIC_PREFIXES = ("s/", "f/")
 _INDEX_FILE = _dist / "index.html"
-_INDEX_TEMPLATE = (
-    _INDEX_FILE.read_text(encoding="utf-8") if _INDEX_FILE.is_file() else ""
-)
+_INDEX_TEMPLATE = ""
+_INDEX_MTIME = None
 
 
 def _index_html(with_panel: bool) -> HTMLResponse:
+    global _INDEX_TEMPLATE, _INDEX_MTIME
+    try:
+        mtime = _INDEX_FILE.stat().st_mtime_ns
+        if mtime != _INDEX_MTIME:
+            _INDEX_TEMPLATE = _INDEX_FILE.read_text(encoding="utf-8")
+            _INDEX_MTIME = mtime
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Frontend not built")
     base = settings.normalized_panel_path if with_panel else ""
     return HTMLResponse(
         _INDEX_TEMPLATE.replace(_PANEL_PLACEHOLDER, base),
@@ -103,11 +124,15 @@ def _static_file(relative: str) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
-if _INDEX_TEMPLATE:
-    app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+@app.get("/assets/{asset_path:path}", include_in_schema=False)
+def assets(asset_path: str):
+    asset = _static_file("assets/" + asset_path)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(asset)
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def spa(full_path: str):
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa(full_path: str):
         if full_path == "api" or full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
 

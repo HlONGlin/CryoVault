@@ -89,7 +89,7 @@ def main() -> None:
     check("read text", "port: 8080" in content["content"])
 
     updated = client.put(
-        f"/api/files/{yaml_file['id']}/content", json={"content": "port: 9090\n"}
+        f"/api/files/{yaml_file['id']}/content", json={"content": "port: 9090\n", "etag": content["etag"]}
     ).json()
     check("write text", "9090" in updated["content"])
 
@@ -109,7 +109,7 @@ def main() -> None:
     )
     saved = client.put(
         f"/api/file-share/{file_share['share_token']}/content",
-        json={"content": "port: 7070\n"},
+        json={"content": "port: 7070\n", "etag": updated["etag"]},
     )
     check("public edit", saved.status_code == 200 and "7070" in saved.json()["content"])
 

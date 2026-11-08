@@ -10,7 +10,7 @@ from fastapi import (
 
 from ..config import settings
 from ..deps import require_admin
-from ..security import login_limiter, session_value, token_matches
+from ..security import login_limiter, revoke_session, session_value, token_matches
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -76,7 +76,8 @@ def create_session(
 
 
 @router.delete("/session")
-def delete_session(response: Response):
+def delete_session(request: Request, response: Response):
+    revoke_session(request.cookies.get(settings.session_cookie))
     response.delete_cookie(
         key=settings.session_cookie,
         path="/api",

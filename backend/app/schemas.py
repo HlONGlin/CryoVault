@@ -20,7 +20,8 @@ class GroupUpdate(BaseModel):
 
 class FileDetail(BaseModel):
     id: int
-    group_id: int
+    group_id: int | None = None
+    folder_id: int | None = None
     name: str
     size: int
     mime_type: str
@@ -51,10 +52,12 @@ class TextContent(BaseModel):
     name: str
     content: str
     updated_at: datetime
+    etag: str
 
 
 class TextUpdate(BaseModel):
     content: str
+    etag: str | None = None
 
 
 class FileShareCreate(BaseModel):
@@ -83,6 +86,7 @@ def to_file_out(f) -> FileDetail:
     return FileDetail(
         id=f.id,
         group_id=f.group_id,
+        folder_id=f.folder_id,
         name=f.name,
         size=f.size,
         mime_type=f.mime_type,

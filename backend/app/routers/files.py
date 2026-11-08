@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,7 +11,7 @@ from .. import operations
 from ..config import settings
 from ..database import get_db
 from ..deps import require_admin
-from ..models import FileItem
+from ..models import FileItem, Folder
 from ..responses import serve_file
 from ..schemas import (
     FileShareCreate,
@@ -30,11 +30,35 @@ router = APIRouter(
 
 
 class RenamePayload(BaseModel):
-    name: str = Field(min_length=1, max_length=512)
+    name: str | None = Field(default=None, min_length=1, max_length=512)
+    folder_id: int | None = None
 
 
 class ArchivePayload(BaseModel):
-    file_ids: list[int] = Field(min_length=1, max_length=500)
+    file_ids: list[int] = Field(default_factory=list, max_length=500)
+    folder_ids: list[int] = Field(default_factory=list, max_length=500)
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def upload_files(
+    files: list[UploadFile] = File(...),
+    folder_id: int | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    if folder_id is not None and db.get(Folder, folder_id) is None:
+        raise HTTPException(404, "Folder not found")
+    results = []
+    for upload in files:
+        try:
+            file = operations.save_upload(db, None, upload, folder_id)
+            results.append({"name": upload.filename, "file": to_file_out(file), "error": None})
+        except HTTPException as exc:
+            results.append({"name": upload.filename, "file": None, "error": str(exc.detail)})
+        except Exception:
+            results.append({"name": upload.filename, "file": None, "error": "Upload failed"})
+        finally:
+            upload.file.close()
+    return {"results": results}
 
 
 @router.post("/archive")
@@ -44,10 +68,17 @@ def download_archive(
     db: Session = Depends(get_db),
 ):
     requested_ids = list(dict.fromkeys(payload.file_ids))
+    requested_folders = list(dict.fromkeys(payload.folder_ids))
+    if not requested_ids and not requested_folders:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files or folders selected")
     files = db.query(FileItem).filter(FileItem.id.in_(requested_ids)).all()
     by_id = {file.id: file for file in files}
     if len(by_id) != len(requested_ids):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more files not found")
+    folders = db.query(Folder).filter(Folder.id.in_(requested_folders)).all()
+    folder_by_id = {folder.id: folder for folder in folders}
+    if len(folder_by_id) != len(requested_folders):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "One or more folders not found")
 
     temp = NamedTemporaryFile(
         prefix="cryovault-",
@@ -60,12 +91,15 @@ def download_archive(
     try:
         used_names: set[str] = set()
         with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
-            for file_id in requested_ids:
-                file = by_id[file_id]
+            def safe_name(name: str, fallback: str) -> str:
+                value = (name or fallback).replace("/", "_").replace("\\", "_").replace("\x00", "_")
+                return value if value not in (".", "..") else fallback
+
+            def add_file(file: FileItem, parent: str = "") -> None:
                 source = operations.stored_path(file)
                 if not source.is_file():
                     raise FileNotFoundError(source)
-                name = file.name or f"file-{file.id}"
+                name = parent + safe_name(file.name, f"file-{file.id}")
                 candidate = name
                 suffix = 2
                 while candidate in used_names:
@@ -77,6 +111,29 @@ def download_archive(
                     suffix += 1
                 used_names.add(candidate)
                 archive.write(source, arcname=candidate)
+
+            for file_id in requested_ids:
+                add_file(by_id[file_id])
+            selected_set = set(requested_folders)
+            for folder_id in requested_folders:
+                folder = folder_by_id[folder_id]
+                ancestor = folder.parent
+                selected_ancestor = False
+                while ancestor is not None:
+                    if ancestor.id in selected_set:
+                        selected_ancestor = True
+                        break
+                    ancestor = ancestor.parent
+                if selected_ancestor:
+                    continue
+                pending = [(folder, "")]
+                for current, parent in pending:
+                    path = parent + safe_name(current.name, f"folder-{current.id}") + "/"
+                    archive.writestr(path, "")
+                    for file in current.files:
+                        if file.id not in requested_ids:
+                            add_file(file, path)
+                    pending.extend((child, path) for child in current.children)
     except Exception:
         archive_path.unlink(missing_ok=True)
         raise
@@ -97,7 +154,22 @@ def get_file(file_id: int, db: Session = Depends(get_db)):
 @router.patch("/{file_id}")
 def rename_file(file_id: int, payload: RenamePayload, db: Session = Depends(get_db)):
     file = operations.get_file_or_404(db, file_id)
-    return to_file_out(operations.rename_file(db, file, payload.name))
+    folder_id = payload.folder_id if "folder_id" in payload.model_fields_set else file.folder_id
+    if folder_id is not None and db.get(Folder, folder_id) is None:
+        raise HTTPException(404, "Folder not found")
+    name = payload.name if payload.name is not None else file.name
+    cleaned = name.replace("\\", "/").rsplit("/", 1)[-1].strip()
+    if not cleaned:
+        raise HTTPException(400, "Invalid name")
+    file.name = operations._unique_name(db, cleaned, folder_id, file.id)
+    if folder_id != file.folder_id:
+        # A moved file no longer belongs to its old legacy group. This also
+        # causes WebDAV to pause until its path mapping has been reconciled.
+        file.group_id = None
+    file.folder_id = folder_id
+    db.commit()
+    db.refresh(file)
+    return to_file_out(file)
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -134,14 +206,15 @@ def get_content(file_id: int, db: Session = Depends(get_db)):
         name=file.name,
         content=operations.read_text(file),
         updated_at=file.updated_at,
+        etag=operations.text_etag(file),
     )
 
 
 @router.put("/{file_id}/content", response_model=TextContent)
 def update_content(file_id: int, payload: TextUpdate, db: Session = Depends(get_db)):
     file = operations.get_file_or_404(db, file_id)
-    file = operations.write_text(db, file, payload.content)
-    return TextContent(name=file.name, content=payload.content, updated_at=file.updated_at)
+    file = operations.write_text(db, file, payload.content, payload.etag)
+    return TextContent(name=file.name, content=payload.content, updated_at=file.updated_at, etag=operations.text_etag(file))
 
 
 @router.get("/{file_id}/share", response_model=FileShareOut | None)

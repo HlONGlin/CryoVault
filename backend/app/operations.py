@@ -1,16 +1,23 @@
 import uuid
 import shutil
+import mimetypes
+import os
+import hashlib
+import hmac
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from .config import settings
-from .models import FileItem, FileShare, Group
+from .models import FileItem, FileShare, Folder, Group, Share
 from .storage import is_text
 
 SYSTEM_GROUP_NAME = "单文件分享"
+_edit_lock = threading.Lock()
 
 
 def stored_path(file: FileItem) -> Path:
@@ -26,6 +33,9 @@ def get_system_group(db: Session) -> Group:
             is_system=True,
         )
         db.add(group)
+        db.flush()
+        db.add(Share(token=group.share_token, target_type="folder", folder_id=None,
+                     allow_edit=group.allow_edit, created_at=group.created_at))
         db.commit()
         db.refresh(group)
     return group
@@ -51,6 +61,14 @@ def ensure_file_share(
         db.add(share)
     elif allow_edit is not None:
         share.allow_edit = allow_edit
+    db.flush()
+    unified = db.query(Share).filter(Share.token == share.share_token).first()
+    if unified is None:
+        unified = Share(token=share.share_token, target_type="file", file_id=file.id,
+                        allow_edit=share.allow_edit, created_at=share.created_at)
+        db.add(unified)
+    else:
+        unified.allow_edit = share.allow_edit
     db.commit()
     db.refresh(share)
     return share
@@ -59,6 +77,9 @@ def ensure_file_share(
 def revoke_file_share(db: Session, file: FileItem) -> None:
     share = get_file_share(db, file)
     if share is not None:
+        unified = db.query(Share).filter(Share.token == share.share_token).first()
+        if unified is not None:
+            db.delete(unified)
         db.delete(share)
         db.commit()
 
@@ -77,44 +98,71 @@ def get_file_or_404(db: Session, file_id: int) -> FileItem:
     return file
 
 
-def save_upload(db: Session, group: Group, upload: UploadFile) -> FileItem:
+def _unique_name(db: Session, name: str, folder_id: int | None, exclude_id: int | None = None, group_id: int | None = None) -> str:
+    candidate = name
+    stem, dot, extension = name.rpartition(".")
+    stem = stem if dot else name
+    suffix = f".{extension}" if dot else ""
+    index = 2
+    while True:
+        query = db.query(FileItem.id).filter(FileItem.folder_id == folder_id, FileItem.name == candidate)
+        if group_id is not None:
+            query = query.filter(FileItem.group_id == group_id)
+        if exclude_id is not None:
+            query = query.filter(FileItem.id != exclude_id)
+        folder_query = db.query(Folder.id).filter(Folder.parent_id == folder_id, Folder.name == candidate)
+        if query.first() is None and folder_query.first() is None:
+            return candidate
+        candidate = f"{stem} ({index}){suffix}"
+        index += 1
+
+
+def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id: int | None = None) -> FileItem:
     raw_name = (upload.filename or "untitled").replace("\\", "/")
     original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
+    if group is not None and not group.is_system and folder_id is None:
+        folder_id = db.execute(
+            text("SELECT folder_id FROM legacy_group_folders WHERE group_id = :id"), {"id": group.id}
+        ).scalar()
+    if folder_id is not None and db.get(Folder, folder_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+    original_name = _unique_name(db, original_name, folder_id, group_id=group.id if group and folder_id is None else None)
     stored_name = uuid.uuid4().hex
     dest = settings.storage_dir / stored_name
+    temp = settings.storage_dir / f".{stored_name}.upload"
 
     size = 0
-    with dest.open("wb") as out:
-        while True:
-            chunk = upload.file.read(1024 * 1024)
-            if not chunk:
-                break
-            size += len(chunk)
-            if settings.max_upload_size and size > settings.max_upload_size:
-                out.close()
-                dest.unlink(missing_ok=True)
-                raise HTTPException(
-                    status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    "File exceeds the configured upload limit",
-                )
-            out.write(chunk)
-
-    file = FileItem(
-        group_id=group.id,
-        name=original_name,
-        stored_name=stored_name,
-        size=size,
-        mime_type=upload.content_type or "application/octet-stream",
-    )
-    db.add(file)
-    db.commit()
-    db.refresh(file)
-    return file
+    committed = False
+    try:
+        with temp.open("wb") as out:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if settings.max_upload_size and size > settings.max_upload_size:
+                    raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File exceeds the configured upload limit")
+                out.write(chunk)
+        os.replace(temp, dest)
+        mime = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+        file = FileItem(group_id=group.id if group else None, folder_id=folder_id, name=original_name,
+                        stored_name=stored_name, size=size, mime_type=mime)
+        db.add(file)
+        db.commit()
+        committed = True
+        db.refresh(file)
+        return file
+    except Exception:
+        db.rollback()
+        temp.unlink(missing_ok=True)
+        if not committed:
+            dest.unlink(missing_ok=True)
+        raise
 
 
 def save_path(
     db: Session,
-    group: Group,
+    group: Group | None,
     source: Path,
     name: str,
     mime_type: str = "application/octet-stream",
@@ -129,24 +177,34 @@ def save_path(
     original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
     stored_name = uuid.uuid4().hex
     destination = settings.storage_dir / stored_name
-    shutil.move(str(source), str(destination))
-    file = FileItem(
-        group_id=group.id,
-        name=original_name,
-        stored_name=stored_name,
-        size=size,
-        mime_type=mime_type or "application/octet-stream",
-    )
-    db.add(file)
-    db.commit()
-    db.refresh(file)
-    return file
+    committed = False
+    try:
+        shutil.move(str(source), str(destination))
+        file = FileItem(
+            group_id=group.id if group else None,
+            folder_id=None,
+            name=original_name,
+            stored_name=stored_name,
+            size=size,
+            mime_type=mime_type or "application/octet-stream",
+        )
+        db.add(file)
+        db.commit()
+        committed = True
+        db.refresh(file)
+        return file
+    except Exception:
+        db.rollback()
+        if not committed:
+            destination.unlink(missing_ok=True)
+        raise
 
 
 def delete_file(db: Session, file: FileItem) -> None:
-    stored_path(file).unlink(missing_ok=True)
+    path = stored_path(file)
     db.delete(file)
     db.commit()
+    path.unlink(missing_ok=True)
 
 
 def read_text(file: FileItem) -> str:
@@ -165,7 +223,11 @@ def read_text(file: FileItem) -> str:
         )
 
 
-def write_text(db: Session, file: FileItem, content: str) -> FileItem:
+def text_etag(file: FileItem) -> str:
+    return hashlib.sha256(stored_path(file).read_bytes()).hexdigest()
+
+
+def write_text(db: Session, file: FileItem, content: str, etag: str | None = None) -> FileItem:
     if not is_text(file.name, file.mime_type):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "File is not a text file")
 
@@ -177,13 +239,24 @@ def write_text(db: Session, file: FileItem, content: str) -> FileItem:
         )
 
     path = stored_path(file)
-    tmp = path.with_name(f"{path.name}.tmp")
-    tmp.write_bytes(data)
-    tmp.replace(path)
-
-    file.size = len(data)
-    file.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    with _edit_lock:
+        if not etag or not hmac.compare_digest(text_etag(file), etag):
+            raise HTTPException(status.HTTP_409_CONFLICT, "File changed; reload before saving")
+        old_data = path.read_bytes()
+        try:
+            tmp.write_bytes(data)
+            tmp.replace(path)
+            file.size = len(data)
+            file.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception:
+            db.rollback()
+            tmp.write_bytes(old_data)
+            tmp.replace(path)
+            raise
+        finally:
+            tmp.unlink(missing_ok=True)
     db.refresh(file)
     return file
 
@@ -191,7 +264,7 @@ def write_text(db: Session, file: FileItem, content: str) -> FileItem:
 def rename_file(db: Session, file: FileItem, new_name: str) -> FileItem:
     cleaned = new_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
     if cleaned:
-        file.name = cleaned
+        file.name = _unique_name(db, cleaned, file.folder_id, file.id)
         db.commit()
         db.refresh(file)
     return file

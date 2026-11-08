@@ -396,6 +396,10 @@ class SyncEngine:
         temp_dir = settings.data_dir / ".webdav-sync"
         temp_dir.mkdir(parents=True, exist_ok=True)
         try:
+            if db.query(FileItem.id).filter(FileItem.group_id.is_(None)).first() is not None:
+                raise RuntimeError(
+                    "WebDAV 同步已暂停：文件树包含尚未映射的文件，请在完成同步路径适配后再运行。"
+                )
             client.ensure_root()
             client.ensure_collection("groups")
             remote = client.walk()

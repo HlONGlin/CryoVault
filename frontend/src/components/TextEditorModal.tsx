@@ -13,7 +13,7 @@ interface TextEditorModalProps {
   file: FileItem | null;
   onClose: () => void;
   load: (file: FileItem) => Promise<TextContent>;
-  save?: (file: FileItem, content: string) => Promise<unknown>;
+  save?: (file: FileItem, content: string, etag: string) => Promise<TextContent>;
   readOnly?: boolean;
 }
 
@@ -27,6 +27,7 @@ export function TextEditorModal({
   const { theme } = useTheme();
   const [content, setContent] = useState("");
   const [original, setOriginal] = useState("");
+  const [etag, setEtag] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function TextEditorModal({
         if (cancelled) return;
         setContent(data.content);
         setOriginal(data.content);
+        setEtag(data.etag);
       })
       .catch((e) => !cancelled && setError(String(e.message ?? e)))
       .finally(() => !cancelled && setLoading(false));
@@ -64,7 +66,8 @@ export function TextEditorModal({
     setSaving(true);
     setError(null);
     try {
-      await save(file, content);
+      const result = await save(file, content, etag);
+      setEtag(result.etag);
       setOriginal(content);
       setSavedAt(new Date().toLocaleTimeString("zh-CN", { hour12: false }));
     } catch (e) {

@@ -20,6 +20,7 @@ export function PublicFile() {
 
   const [content, setContent] = useState("");
   const [original, setOriginal] = useState("");
+  const [etag, setEtag] = useState("");
   const [contentLoading, setContentLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export function PublicFile() {
       const data = await fileShareApi.getContent(token);
       setContent(data.content);
       setOriginal(data.content);
+      setEtag(data.etag);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -76,7 +78,8 @@ export function PublicFile() {
     setError(null);
     setSaveMessage(null);
     try {
-      await fileShareApi.saveContent(token, content);
+      const result = await fileShareApi.saveContent(token, content, etag);
+      setEtag(result.etag);
       setOriginal(content);
       setSaveMessage("已成功保存更改");
     } catch (e) {

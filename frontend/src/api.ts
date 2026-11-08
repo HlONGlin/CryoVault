@@ -33,6 +33,7 @@ export interface TextContent {
   name: string;
   content: string;
   updated_at: string;
+  etag: string;
 }
 
 export interface FileShareInfo {
@@ -271,10 +272,10 @@ export const adminApi = {
     return res.blob();
   },
   getContent: (fileId: number) => request<TextContent>(`/files/${fileId}/content`),
-  saveContent: (fileId: number, content: string) =>
+  saveContent: (fileId: number, content: string, etag: string) =>
     request<TextContent>(`/files/${fileId}/content`, {
       method: "PUT",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, etag }),
     }),
 
   getFileShare: async (fileId: number): Promise<FileShareInfo | null> => {
@@ -356,20 +357,20 @@ export const shareApi = {
   listFiles: (token: string) => request<FileItem[]>(`/share/${token}/files`),
   getContent: (token: string, fileId: number) =>
     request<TextContent>(`/share/${token}/files/${fileId}/content`),
-  saveContent: (token: string, fileId: number, content: string) =>
+  saveContent: (token: string, fileId: number, content: string, etag: string) =>
     request<TextContent>(`/share/${token}/files/${fileId}/content`, {
       method: "PUT",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, etag }),
     }),
 };
 
 export const fileShareApi = {
   info: (token: string) => request<PublicFileShare>(`/file-share/${token}`),
   getContent: (token: string) => request<TextContent>(`/file-share/${token}/content`),
-  saveContent: (token: string, content: string) =>
+  saveContent: (token: string, content: string, etag: string) =>
     request<TextContent>(`/file-share/${token}/content`, {
       method: "PUT",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, etag }),
     }),
 };
 
