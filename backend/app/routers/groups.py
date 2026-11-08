@@ -8,6 +8,7 @@ from ..deps import require_admin
 from ..models import Folder, Group, Share
 from ..schemas import GroupCreate, GroupOut, GroupUpdate, to_file_out, to_group_out
 from .folders import _clean_name, _unique_folder_name
+from ..share_security import contains_folder
 
 router = APIRouter(
     prefix="/api/groups",
@@ -90,6 +91,8 @@ def delete_group(group_id: int, db: Session = Depends(get_db)):
     folder_id = db.execute(text("SELECT folder_id FROM legacy_group_folders WHERE group_id = :id"),
                            {"id": group_id}).scalar()
     folder = db.get(Folder, folder_id) if folder_id is not None else None
+    if folder is not None and any(not contains_folder(db, folder.id, file.folder_id) for file in group.files):
+        raise HTTPException(409, "Legacy group contains files moved outside its folder; delete the folder from the file tree instead")
     descendants = [folder] if folder else []
     for current in descendants:
         descendants.extend(current.children)

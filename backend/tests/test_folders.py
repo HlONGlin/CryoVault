@@ -11,6 +11,7 @@ from app.models import FileItem, Folder
 from app.routers.folders import router
 from app.routers.folders import delete_folder
 from app.routers.files import router as files_router
+from app.routers.groups import router as groups_router
 from io import BytesIO
 from zipfile import ZipFile
 import pytest
@@ -85,4 +86,38 @@ def test_folder_delete_commit_failure_preserves_disk(tmp_path, monkeypatch):
     with sessions() as session:
         assert session.query(FileItem).count() == 1
         assert session.query(Folder).count() == 1
+    engine.dispose()
+
+
+def test_legacy_group_delete_rejects_files_moved_outside(tmp_path, monkeypatch):
+    from sqlalchemy import text
+    from app.models import Group
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    settings.storage_dir.mkdir()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE legacy_group_folders (group_id INTEGER PRIMARY KEY, folder_id INTEGER NOT NULL)")
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    with sessions.begin() as session:
+        root, outside = Folder(name="root", description=""), Folder(name="outside", description="")
+        group = Group(name="root", description="")
+        session.add_all([root, outside, group])
+        session.flush()
+        session.execute(text("INSERT INTO legacy_group_folders VALUES (:g,:f)"), {"g": group.id, "f": root.id})
+        session.add(FileItem(group_id=group.id, folder_id=outside.id, name="a", stored_name="a", size=1))
+        group_id = group.id
+    path = settings.storage_dir / "a"
+    path.write_bytes(b"a")
+    app = FastAPI()
+    app.include_router(groups_router)
+    def test_db():
+        with sessions() as session:
+            yield session
+    app.dependency_overrides[get_db] = test_db
+    app.dependency_overrides[require_admin] = lambda: None
+    assert TestClient(app).delete(f"/api/groups/{group_id}").status_code == 409
+    assert path.read_bytes() == b"a"
+    with sessions() as session:
+        assert session.query(FileItem).count() == 1
     engine.dispose()
