@@ -311,7 +311,7 @@ body {
     font-weight: 600;
   }
 
-  /* Cloudreve style view toggle pills */
+  /* View toggle pills */
   .view-toggle-btn {
     @apply p-1.5 rounded-lg transition text-app-muted hover:text-app-text;
   }

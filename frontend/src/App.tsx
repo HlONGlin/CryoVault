@@ -6,24 +6,15 @@ import { AuthProvider, RequireAuth } from "./auth";
 import { PANEL_BASE, panelPath } from "./base";
 import { Layout } from "./components/Layout";
 
-const Dashboard = lazy(() =>
-  import("./pages/Dashboard").then((m) => ({ default: m.Dashboard }))
-);
-const GroupDetail = lazy(() =>
-  import("./pages/GroupDetail").then((m) => ({ default: m.GroupDetail }))
-);
+const Files = lazy(() => import("./pages/Files").then((m) => ({ default: m.Files })));
+const Shares = lazy(() => import("./pages/Shares").then((m) => ({ default: m.Shares })));
 const Login = lazy(() =>
   import("./pages/Login").then((m) => ({ default: m.Login }))
 );
 const NotFound = lazy(() =>
   import("./pages/NotFound").then((m) => ({ default: m.NotFound }))
 );
-const PublicFile = lazy(() =>
-  import("./pages/PublicFile").then((m) => ({ default: m.PublicFile }))
-);
-const SharePage = lazy(() =>
-  import("./pages/SharePage").then((m) => ({ default: m.SharePage }))
-);
+const UnifiedSharePage = lazy(() => import("./pages/UnifiedShare").then((m) => ({ default: m.UnifiedSharePage })));
 const Settings = lazy(() =>
   import("./pages/Settings").then((m) => ({ default: m.Settings }))
 );
@@ -43,16 +34,16 @@ function AdminRoutes() {
         index
         element={
           <RequireAuth>
-            <Dashboard />
+            <Navigate to={panelPath("/files")} replace />
           </RequireAuth>
         }
       />
       <Route path="login" element={<Login />} />
       <Route
-        path="groups/:id"
+        path="files/:folderId?"
         element={
           <RequireAuth>
-            <GroupDetail />
+            <Files />
           </RequireAuth>
         }
       />
@@ -65,10 +56,10 @@ function AdminRoutes() {
         }
       />
       <Route
-        path="direct"
+        path="shares"
         element={
           <RequireAuth>
-            <Navigate to={`${panelPath("/")}#single-files`} replace />
+            <Shares />
           </RequireAuth>
         }
       />
@@ -83,8 +74,8 @@ export default function App() {
       <Layout>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/s/:token" element={<SharePage />} />
-            <Route path="/f/:token" element={<PublicFile />} />
+            <Route path="/s/:token" element={<UnifiedSharePage />} />
+            <Route path="/f/:token" element={<UnifiedSharePage />} />
             <Route path={`${PANEL_BASE}/*`} element={<AdminRoutes />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

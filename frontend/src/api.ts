@@ -3,6 +3,7 @@ export type FileKind = "text" | "image" | "video" | "audio" | "other";
 export interface FileItem {
   id: number;
   group_id: number;
+  folder_id?: number | null;
   name: string;
   size: number;
   mime_type: string;
@@ -10,6 +11,74 @@ export interface FileItem {
   created_at: string;
   updated_at: string;
 }
+
+export interface FolderItem {
+  type: "folder";
+  id: number;
+  parent_id: number | null;
+  name: string;
+  description: string;
+  updated_at: string;
+}
+export type TreeItem = FolderItem | (FileItem & { type: "file" });
+export interface Listing { items: TreeItem[]; total: number; page: number; page_size: number }
+export interface UnifiedShare {
+  id: number; token: string; target_type: "file" | "folder";
+  file_id: number | null; folder_id: number | null; name: string;
+  allow_edit: boolean; expires_at: string | null; password_required: boolean; created_at: string;
+}
+
+export const treeApi = {
+  list: (folderId: number | null, page = 1, q = "", sort = "name") =>
+    request<Listing>(`/folders?${new URLSearchParams({
+      ...(folderId === null ? {} : { parent_id: String(folderId) }),
+      page: String(page), page_size: "100", q, sort,
+    })}`),
+  folder: (id: number) => request<FolderItem>(`/folders/${id}`),
+  createFolder: (name: string, parent_id: number | null) =>
+    request<FolderItem>("/folders", { method: "POST", body: JSON.stringify({ name, parent_id }) }),
+  update: (item: TreeItem, data: { name?: string; folder_id?: number | null; parent_id?: number | null }) =>
+    request(`/${item.type === "folder" ? "folders" : "files"}/${item.id}`, {
+      method: "PATCH", body: JSON.stringify(data),
+    }),
+  remove: (item: TreeItem) =>
+    request<void>(`/${item.type === "folder" ? "folders" : "files"}/${item.id}`, { method: "DELETE" }),
+  upload: async (files: File[], folderId: number | null) => {
+    const data = new FormData();
+    files.forEach(file => data.append("files", file));
+    if (folderId !== null) data.append("folder_id", String(folderId));
+    return request<{results: {name: string; error: string | null}[]}>("/files", { method: "POST", body: data });
+  },
+  importLink: (url: string, folder_id: number | null) => request<FileItem>("/files/import", {
+    method: "POST", body: JSON.stringify({url, folder_id}),
+  }),
+  archive: async (items: TreeItem[]) => {
+    const response = await fetch("/api/files/archive", {method: "POST", credentials: "same-origin",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+        file_ids: items.filter(item => item.type === "file").map(item => item.id),
+        folder_ids: items.filter(item => item.type === "folder").map(item => item.id),
+      })});
+    if (!response.ok) throw new Error(`下载失败 (${response.status})`);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a"); link.href = url; link.download = "cryovault-files.zip";
+    link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  stats: () => request<{file_count: number; total_size: number}>("/stats"),
+  shares: () => request<UnifiedShare[]>("/shares"),
+  createShare: (item: TreeItem) => request<UnifiedShare>("/shares", {
+    method: "POST", body: JSON.stringify({ target_type: item.type,
+      ...(item.type === "folder" ? { folder_id: item.id } : { file_id: item.id }) }),
+  }),
+  updateShare: (id: number, body: object) => request<UnifiedShare>(`/shares/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteShare: (id: number) => request<void>(`/shares/${id}`, { method: "DELETE" }),
+  publicInfo: (token: string) => request<UnifiedShare & {file: FileItem | null}>(`/public/shares/${token}`),
+  publicUnlock: (token: string, password: string) => request(`/public/shares/${token}/unlock`, {method: "POST", body: JSON.stringify({password})}),
+  publicList: (token: string, folderId: number | null, page = 1) => request<Listing>(
+    `/public/shares/${token}/folders?${new URLSearchParams({page: String(page), ...(folderId === null ? {} : {folder_id: String(folderId)})})}`),
+  publicContent: (token: string, id: number) => request<TextContent>(`/public/shares/${token}/files/${id}/content`),
+  publicSave: (token: string, id: number, content: string, etag: string) => request<TextContent>(
+    `/public/shares/${token}/files/${id}/content`, {method: "PUT", body: JSON.stringify({content, etag})}),
+};
 
 export interface Group {
   id: number;
