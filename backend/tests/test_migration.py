@@ -7,7 +7,7 @@ import sys
 import pytest
 from sqlalchemy import create_engine, text
 
-from app.database import _migrate_v1
+from app.database import _migrate_v1, _migrate_v3
 
 
 def test_v1_migration_preserves_tokens_files_and_sync_paths(tmp_path):
@@ -143,3 +143,18 @@ def test_startup_creates_restorable_backup_before_migration(tmp_path):
         assert migrated.execute("PRAGMA foreign_key_check").fetchall() == []
         assert next(row for row in migrated.execute("PRAGMA table_info(files)") if row[1] == "group_id")[3] == 0
     assert (storage / "stored-id").read_bytes() == b"abc"
+
+
+def test_v3_resolves_file_and_folder_name_conflicts(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'names.db'}")
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE folders (id INTEGER PRIMARY KEY, parent_id INTEGER, name TEXT)")
+        connection.exec_driver_sql("CREATE TABLE files (id INTEGER PRIMARY KEY, folder_id INTEGER, name TEXT)")
+        connection.exec_driver_sql("INSERT INTO folders VALUES (1, NULL, 'docs')")
+        connection.exec_driver_sql("INSERT INTO files VALUES (1, NULL, 'docs'), (2, 1, 'a.txt'), (3, 1, 'a.txt')")
+        _migrate_v3(connection)
+        _migrate_v3(connection)
+        assert connection.exec_driver_sql("SELECT name FROM files ORDER BY id").scalars().all() == [
+            "docs (2)", "a.txt", "a (2).txt"
+        ]
+    engine.dispose()

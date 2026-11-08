@@ -231,6 +231,35 @@ def _migrate_v2(connection) -> None:
     connection.execute(text("CREATE INDEX ix_files_folder_id ON files(folder_id)"))
 
 
+def _migrate_v3(connection) -> None:
+    if not _table_exists(connection, "files") or not _table_exists(connection, "folders"):
+        return
+    occupied: dict[int | None, set[str]] = {}
+    folders = connection.execute(text("SELECT id, parent_id, name FROM folders ORDER BY id")).all()
+    for folder_id, parent_id, name in folders:
+        names = occupied.setdefault(parent_id, set())
+        candidate, suffix = name, 2
+        while candidate in names:
+            candidate = f"{name} ({suffix})"
+            suffix += 1
+        if candidate != name:
+            connection.execute(text("UPDATE folders SET name=:name WHERE id=:id"), {"name": candidate, "id": folder_id})
+        names.add(candidate)
+    files = connection.execute(text("SELECT id, folder_id, name FROM files ORDER BY id")).all()
+    for file_id, folder_id, name in files:
+        names = occupied.setdefault(folder_id, set())
+        stem, dot, extension = name.rpartition(".")
+        stem = stem if dot else name
+        suffix = f".{extension}" if dot else ""
+        candidate, index = name, 2
+        while candidate in names:
+            candidate = f"{stem} ({index}){suffix}"
+            index += 1
+        if candidate != name:
+            connection.execute(text("UPDATE files SET name=:name WHERE id=:id"), {"name": candidate, "id": file_id})
+        names.add(candidate)
+
+
 def migrate() -> None:
     from . import models  # noqa: F401
 
@@ -241,7 +270,7 @@ def migrate() -> None:
             current = connection.execute(
                 text("SELECT version FROM schema_version WHERE id = 1")
             ).scalar() or 0
-        if current >= 2:
+        if current >= 3:
             return
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
@@ -256,9 +285,11 @@ def migrate() -> None:
                 )
             if current < 2:
                 _migrate_v2(connection)
+            if current < 3:
+                _migrate_v3(connection)
             if connection.exec_driver_sql("PRAGMA foreign_key_check").first():
                 raise RuntimeError("Foreign key validation failed; migration rolled back")
-            connection.execute(text("UPDATE schema_version SET version = 2 WHERE id = 1"))
+            connection.execute(text("UPDATE schema_version SET version = 3 WHERE id = 1"))
             connection.commit()
         except Exception:
             connection.rollback()
@@ -274,7 +305,7 @@ def init_db() -> None:
         legacy = _table_exists(connection, "groups") and not _table_exists(connection, "schema_version")
         pending = _table_exists(connection, "schema_version") and (
             connection.execute(text("SELECT version FROM schema_version WHERE id = 1")).scalar() or 0
-        ) < 2
+        ) < 3
     if legacy or pending:
         backup_database()
     migrate()

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     panel_path: str = ""
 
     # Expose /docs and /openapi.json. Disabled by the installer by default.
-    docs_enabled: bool = True
+    docs_enabled: bool = False
 
     # Admin unlock brute-force protection.
     login_max_attempts: int = 5

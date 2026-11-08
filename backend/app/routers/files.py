@@ -39,6 +39,31 @@ class ArchivePayload(BaseModel):
     folder_ids: list[int] = Field(default_factory=list, max_length=500)
 
 
+class ImportPayload(BaseModel):
+    url: str = Field(min_length=8, max_length=4096)
+    name: str = Field(default="", max_length=512)
+    folder_id: int | None = None
+
+
+@router.post("/import", status_code=201)
+def import_link(payload: ImportPayload, db: Session = Depends(get_db)):
+    import httpx
+    from .direct import _download_link
+    if payload.folder_id is not None and db.get(Folder, payload.folder_id) is None:
+        raise HTTPException(404, "Folder not found")
+    temp = NamedTemporaryFile(prefix="cryovault-link-", dir=settings.data_dir, delete=False)
+    path = Path(temp.name)
+    temp.close()
+    try:
+        name, content_type = _download_link(payload.url, path)
+        file = operations.save_path(db, None, path, payload.name.strip() or name, content_type, payload.folder_id)
+        return to_file_out(file)
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "Could not download the source link") from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def upload_files(
     files: list[UploadFile] = File(...),

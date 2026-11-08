@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,10 @@ from .webdav import sync_scheduler
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if not settings.admin_token:
+        logging.getLogger("uvicorn.error").warning(
+            "SECURITY WARNING: CRYOVAULT_ADMIN_TOKEN is empty; all management APIs are unauthenticated."
+        )
     init_db()
     load_saved_settings(SessionLocal)
     sync_scheduler.start()

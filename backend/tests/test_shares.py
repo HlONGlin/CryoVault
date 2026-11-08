@@ -59,6 +59,18 @@ def test_password_expiry_subtree_and_revocation(tmp_path, monkeypatch):
     assert client.get(base + "/folders", params={"folder_id": other_id}).status_code == 404
     assert client.get(base + f"/files/{inside_id}/download").content == b"one"
     assert client.get(base + f"/files/{outside_id}/download").status_code == 404
+    content = client.get(base + f"/files/{inside_id}/content")
+    assert content.status_code == 200
+    assert client.put(base + f"/files/{inside_id}/content", json={
+        "content": "changed", "etag": content.json()["etag"]
+    }).status_code == 403
+    assert client.patch(f"/api/shares/{share['id']}", json={"allow_edit": True}).status_code == 200
+    assert client.put(base + f"/files/{inside_id}/content", json={
+        "content": "changed", "etag": content.json()["etag"]
+    }).status_code == 200
+    assert client.put(base + f"/files/{inside_id}/content", json={
+        "content": "stale", "etag": content.json()["etag"]
+    }).status_code == 409
     assert client.patch("/api/shares/" + str(share["id"]), json={"password": "new"}).status_code == 200
     assert client.get(base + "/folders").status_code == 403
     assert client.post(base + "/unlock", json={"password": "new"}).status_code == 200
@@ -117,4 +129,68 @@ def test_legacy_share_routes_honor_new_password_and_revocation(tmp_path, monkeyp
         assert client.get(legacy_url).status_code == 200
         assert client.delete(f"/api/shares/{share_id}").status_code == 204
         assert client.get(legacy_url).status_code == 404
+    engine.dispose()
+
+
+def test_legacy_system_share_does_not_expose_other_root_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    settings.storage_dir.mkdir()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    with sessions.begin() as session:
+        group = Group(name="direct", description="", share_token="system-token", is_system=True)
+        session.add(group)
+        session.flush()
+        original = FileItem(group_id=group.id, name="original", stored_name="original", size=1)
+        added = FileItem(name="new", stored_name="new", size=1)
+        session.add_all([original, added, Share(token="system-token", target_type="folder")])
+        session.flush()
+        original_id, added_id = original.id, added.id
+    (settings.storage_dir / "original").write_bytes(b"a")
+    (settings.storage_dir / "new").write_bytes(b"b")
+    app = FastAPI()
+    app.include_router(public_router)
+    def test_db():
+        with sessions() as session:
+            yield session
+    app.dependency_overrides[get_db] = test_db
+    client = TestClient(app)
+    base = "/api/public/shares/system-token"
+    assert [item["id"] for item in client.get(base + "/folders").json()["items"]] == [original_id]
+    assert client.get(base + f"/files/{original_id}/download").content == b"a"
+    assert client.get(base + f"/files/{added_id}/download").status_code == 404
+    engine.dispose()
+
+
+def test_legacy_group_share_excludes_moved_subtree(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    settings.storage_dir.mkdir()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE legacy_group_folders (group_id INTEGER PRIMARY KEY, folder_id INTEGER NOT NULL UNIQUE)")
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    with sessions.begin() as session:
+        root = Folder(name="root", description="")
+        moved = Folder(name="moved", description="")
+        group = Group(name="root", description="", share_token="group-token")
+        session.add_all([root, moved, group])
+        session.flush()
+        session.execute(__import__("sqlalchemy").text("INSERT INTO legacy_group_folders VALUES (:g, :f)"),
+                        {"g": group.id, "f": root.id})
+        file = FileItem(group_id=group.id, folder_id=moved.id, name="secret", stored_name="secret", size=1)
+        session.add_all([file, Share(token="group-token", target_type="folder", folder_id=root.id)])
+        session.flush()
+        file_id = file.id
+    (settings.storage_dir / "secret").write_bytes(b"x")
+    app = FastAPI()
+    app.include_router(legacy_folder_router)
+    def test_db():
+        with sessions() as session:
+            yield session
+    app.dependency_overrides[get_db] = test_db
+    client = TestClient(app)
+    assert client.get("/api/share/group-token/files").json() == []
+    assert client.get(f"/api/share/group-token/files/{file_id}/download").status_code == 404
     engine.dispose()

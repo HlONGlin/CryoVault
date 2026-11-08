@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..deps import require_admin
-from ..models import FileItem, Folder, Share
+from ..models import FileItem, Folder, Group, Share
 from ..responses import serve_file
-from ..schemas import to_file_out
+from ..schemas import TextContent, TextUpdate, to_file_out
 from ..security import login_limiter
 from ..share_security import (
     contains_folder, cookie_name, cookie_valid, cookie_value, hash_password, resolve_share,
@@ -151,6 +151,19 @@ def public_listing(token: str, request: Request, folder_id: int | None = None,
     share = resolve_share(db, token, request)
     if share.target_type != "folder":
         raise HTTPException(404, "Folder not found")
+    if share.folder_id is None:
+        legacy = db.query(Group).filter(Group.share_token == token, Group.is_system.is_(True)).first()
+        if legacy is None or folder_id is not None:
+            raise HTTPException(404, "Folder not found")
+        query = db.query(FileItem).filter(FileItem.group_id == legacy.id, FileItem.folder_id.is_(None))
+        if q:
+            query = query.filter(FileItem.name.contains(q, autoescape=True))
+        if page < 1 or page_size < 1 or page_size > 500:
+            raise HTTPException(422, "Invalid pagination")
+        total = query.count()
+        rows = query.order_by(FileItem.name, FileItem.id).offset((page - 1) * page_size).limit(page_size).all()
+        return {"items": [{"type": "file", **to_file_out(row).model_dump()} for row in rows],
+                "page": page, "page_size": page_size, "total": total}
     target = share.folder_id if folder_id is None else folder_id
     if not contains_folder(db, share.folder_id, target):
         raise HTTPException(404, "Folder not found")
@@ -161,10 +174,26 @@ def public_listing(token: str, request: Request, folder_id: int | None = None,
 
 @public_router.get("/{token}/files/{file_id}/{action}")
 def public_file(token: str, file_id: int, action: str, request: Request, db: Session = Depends(get_db)):
-    from ..operations import stored_path
+    from .. import operations
     share = resolve_share(db, token, request)
     file = shared_file(db, share, file_id)
+    if action == "content":
+        return TextContent(name=file.name, content=operations.read_text(file),
+                           updated_at=file.updated_at, etag=operations.text_etag(file))
     if action not in ("raw", "download"):
         raise HTTPException(404, "Not found")
-    return serve_file(stored_path(file), request, file.mime_type,
+    return serve_file(operations.stored_path(file), request, file.mime_type,
                       filename=file.name if action == "download" else None, inline=action == "raw")
+
+
+@public_router.put("/{token}/files/{file_id}/content", response_model=TextContent)
+def public_update_content(token: str, file_id: int, payload: TextUpdate, request: Request,
+                          db: Session = Depends(get_db)):
+    from .. import operations
+    share = resolve_share(db, token, request)
+    if not share.allow_edit:
+        raise HTTPException(403, "Editing is disabled for this share")
+    file = shared_file(db, share, file_id)
+    file = operations.write_text(db, file, payload.content, payload.etag)
+    return TextContent(name=file.name, content=payload.content, updated_at=file.updated_at,
+                       etag=operations.text_etag(file))

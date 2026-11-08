@@ -377,6 +377,11 @@ class SyncEngine:
             client.close()
 
     def run(self) -> SyncReport:
+        # The legacy group namespace cannot safely represent folder moves and
+        # deletions. Keep both sides untouched until a mapping is implemented.
+        raise RuntimeError("WebDAV 同步已暂停：新版文件树的路径映射尚未完成，现有远端数据不会被修改。")
+
+    def _run_legacy(self) -> SyncReport:
         if not self.configured():
             raise RuntimeError(
                 "WebDAV is not configured; set CRYOVAULT_WEBDAV_URL, "

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
-from .models import FileItem, Folder, Share
+from .models import FileItem, Folder, Group, Share
 
 
 def hash_password(password: str) -> str:
@@ -93,6 +93,9 @@ def shared_file(db: Session, share: Share, file_id: int) -> FileItem:
         raise HTTPException(404, "File not found")
     if share.target_type == "file":
         allowed = file.id == share.file_id
+    elif share.folder_id is None:
+        legacy = db.query(Group).filter(Group.share_token == share.token, Group.is_system.is_(True)).first()
+        allowed = legacy is not None and file.group_id == legacy.id and file.folder_id is None
     else:
         allowed = contains_folder(db, share.folder_id, file.folder_id)
     if not allowed:

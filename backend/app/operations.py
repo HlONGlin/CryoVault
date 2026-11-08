@@ -166,6 +166,7 @@ def save_path(
     source: Path,
     name: str,
     mime_type: str = "application/octet-stream",
+    folder_id: int | None = None,
 ) -> FileItem:
     size = source.stat().st_size
     if settings.max_upload_size and size > settings.max_upload_size:
@@ -175,6 +176,7 @@ def save_path(
         )
     raw_name = (name or "untitled").replace("\\", "/")
     original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
+    original_name = _unique_name(db, original_name, folder_id)
     stored_name = uuid.uuid4().hex
     destination = settings.storage_dir / stored_name
     committed = False
@@ -182,11 +184,11 @@ def save_path(
         shutil.move(str(source), str(destination))
         file = FileItem(
             group_id=group.id if group else None,
-            folder_id=None,
+            folder_id=folder_id,
             name=original_name,
             stored_name=stored_name,
             size=size,
-            mime_type=mime_type or "application/octet-stream",
+            mime_type=mimetypes.guess_type(original_name)[0] or "application/octet-stream",
         )
         db.add(file)
         db.commit()

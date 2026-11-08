@@ -7,7 +7,7 @@ from ..database import get_db
 from ..models import Folder, Group, Share
 from ..responses import serve_file
 from ..schemas import ShareInfo, TextContent, TextUpdate, to_file_out
-from ..share_security import resolve_share
+from ..share_security import resolve_share, shared_file
 
 router = APIRouter(prefix="/api/share", tags=["share"])
 
@@ -31,6 +31,9 @@ def resolve_group_file(token: str, file_id: int, db: Session, request: Request):
     file = operations.get_file_or_404(db, file_id)
     if file.group_id != group.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "File not found")
+    unified = db.query(Share).filter(Share.token == token).first()
+    if unified is not None:
+        shared_file(db, unified, file_id)
     return group, file
 
 
@@ -53,7 +56,18 @@ def share_info(token: str, request: Request, db: Session = Depends(get_db)):
 @router.get("/{token}/files")
 def share_files(token: str, request: Request, db: Session = Depends(get_db)):
     group = resolve_group(token, db, request)
-    return [to_file_out(f) for f in group.files]
+    unified = db.query(Share).filter(Share.token == token).first()
+    result = []
+    for file in group.files:
+        try:
+            if unified is not None:
+                shared_file(db, unified, file.id)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            continue
+        result.append(to_file_out(file))
+    return result
 
 
 @router.get("/{token}/files/{file_id}/download")
