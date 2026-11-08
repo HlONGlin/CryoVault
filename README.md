@@ -2,9 +2,11 @@
 
 # CryoVault
 
+> 当前重构分支尚未达到 v0.3.0 发布验收条件。WebDAV 同步已暂停，旧同步状态和远端文件会保留；不要将此分支用于生产升级。迁移与回滚细节见 [重构方案](docs/REFACTOR_PLAN.md) 和 [架构说明](docs/ARCHITECTURE.md)。
+
 **一个专注于本地存储、快速分享和文件预览的轻量级自托管网盘。**
 
-管理端使用令牌保护，文件保存在自己的磁盘上；分组链接和单文件链接可以直接交付给其他人，无需登录。
+管理端使用令牌保护，文件和文件夹可通过分享链接交付给其他人，无需登录。文件以明文保存在自己的磁盘上。
 
 <br />
 
@@ -44,7 +46,7 @@ CryoVault 适合以下场景：
 
 ## 一键部署（推荐）
 
-适用于支持 `systemd` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python / Node.js 依赖、构建前端、创建独立服务用户、写入配置，并注册 `cryovault.service`。
+适用于支持 `systemd` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python / Node.js 依赖、构建前端、创建服务用户、写入配置，并注册 `cryovault.service`。当前 systemd 单元没有指定 `User=`，服务实际以 root 运行；网页内更新也以该权限执行从 GitHub 获取的脚本，请仅在信任更新来源时启用。
 
 ```bash
 bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
