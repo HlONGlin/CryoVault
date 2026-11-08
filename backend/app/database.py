@@ -1,7 +1,6 @@
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-import shutil
 import sqlite3
 
 from sqlalchemy import create_engine, event, inspect, text
@@ -50,7 +49,7 @@ def backup_database() -> Path | None:
     source = _database_path()
     if not source.exists():
         return None
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     target = source.with_name(f"{source.name}.pre-v0.3.0-{stamp}.bak")
     source_conn = sqlite3.connect(source)
     target_conn = sqlite3.connect(target)
@@ -84,6 +83,10 @@ def _ensure_schema_version(connection) -> int:
 
 def _migrate_v1(connection) -> None:
     inspector = inspect(connection)
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS legacy_group_folders "
+        "(group_id INTEGER PRIMARY KEY, folder_id INTEGER NOT NULL UNIQUE)"
+    ))
     if _table_exists(connection, "files"):
         file_columns = {column["name"] for column in inspector.get_columns("files")}
         if "folder_id" not in file_columns:
@@ -123,10 +126,18 @@ def _migrate_v1(connection) -> None:
     groups = []
     if _table_exists(connection, "groups"):
         columns = {column["name"] for column in inspect(connection).get_columns("groups")}
+        if "is_system" not in columns:
+            connection.execute(text("ALTER TABLE groups ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT 0"))
+            columns.add("is_system")
         system_expr = "is_system" if "is_system" in columns else "0 AS is_system"
         groups = connection.execute(
             text(f"SELECT id, name, description, share_token, allow_edit, {system_expr}, created_at FROM groups")
         ).mappings().all()
+    tokens = [group["share_token"] for group in groups]
+    if _table_exists(connection, "file_shares"):
+        tokens.extend(connection.execute(text("SELECT share_token FROM file_shares")).scalars())
+    if len(tokens) != len(set(tokens)):
+        raise RuntimeError("Legacy share tokens conflict; migration stopped without changing data")
     folder_by_group: dict[int, int | None] = {}
     for group in groups:
         if group["is_system"]:
@@ -138,14 +149,26 @@ def _migrate_v1(connection) -> None:
             )
             continue
         existing = connection.execute(
-            text("SELECT id FROM folders WHERE name = :name AND parent_id IS NULL"),
-            {"name": group["name"]},
+            text("SELECT folder_id FROM legacy_group_folders WHERE group_id = :id"),
+            {"id": group["id"]},
         ).scalar()
         if existing is None:
+            name = group["name"]
+            suffix = 2
+            while connection.execute(
+                text("SELECT 1 FROM folders WHERE name = :name AND parent_id IS NULL"),
+                {"name": name},
+            ).first():
+                name = f'{group["name"]} ({suffix})'
+                suffix += 1
             existing = connection.execute(
                 text("INSERT INTO folders(name, description, created_at, updated_at) VALUES (:name, :description, :created_at, :created_at)"),
-                {"name": group["name"], "description": group["description"], "created_at": group["created_at"]},
+                {"name": name, "description": group["description"], "created_at": group["created_at"]},
             ).lastrowid
+            connection.execute(
+                text("INSERT INTO legacy_group_folders(group_id, folder_id) VALUES (:group_id, :folder_id)"),
+                {"group_id": group["id"], "folder_id": existing},
+            )
         folder_by_group[group["id"]] = int(existing)
         connection.execute(
             text("INSERT OR IGNORE INTO shares(token, target_type, folder_id, allow_edit, created_at) "
@@ -166,6 +189,48 @@ def _migrate_v1(connection) -> None:
         """))
 
 
+def _migrate_v2(connection) -> None:
+    if not _table_exists(connection, "files"):
+        return
+    columns = inspect(connection).get_columns("files")
+    group_column = next(column for column in columns if column["name"] == "group_id")
+    if group_column["nullable"]:
+        return
+    expected = {"id", "group_id", "folder_id", "name", "stored_name", "size",
+                "mime_type", "created_at", "updated_at"}
+    if {column["name"] for column in columns} != expected:
+        raise RuntimeError("Unexpected files schema; migration stopped")
+    custom_objects = connection.execute(text(
+        "SELECT name FROM sqlite_master WHERE tbl_name='files' AND "
+        "(type='trigger' OR (type='index' AND sql IS NOT NULL AND "
+        "name NOT IN ('ix_files_group_id', 'ix_files_folder_id')))"
+    )).all()
+    if custom_objects:
+        raise RuntimeError("Custom files indexes or triggers require manual migration")
+    connection.execute(text("""
+        CREATE TABLE files_v2 (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+            folder_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+            name VARCHAR(512) NOT NULL,
+            stored_name VARCHAR(64) NOT NULL UNIQUE,
+            size INTEGER NOT NULL,
+            mime_type VARCHAR(200) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    connection.execute(text("""
+        INSERT INTO files_v2
+        SELECT id, group_id, folder_id, name, stored_name, size, mime_type, created_at, updated_at
+        FROM files
+    """))
+    connection.execute(text("DROP TABLE files"))
+    connection.execute(text("ALTER TABLE files_v2 RENAME TO files"))
+    connection.execute(text("CREATE INDEX ix_files_group_id ON files(group_id)"))
+    connection.execute(text("CREATE INDEX ix_files_folder_id ON files(folder_id)"))
+
+
 def migrate() -> None:
     from . import models  # noqa: F401
 
@@ -176,12 +241,26 @@ def migrate() -> None:
             current = connection.execute(
                 text("SELECT version FROM schema_version WHERE id = 1")
             ).scalar() or 0
-        if current >= 1:
+        if current >= 2:
             return
-    with engine.begin() as connection:
-        _ensure_schema_version(connection)
-        _migrate_v1(connection)
-        connection.execute(text("UPDATE schema_version SET version = 1 WHERE id = 1"))
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        try:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            current = _ensure_schema_version(connection)
+            if current < 1:
+                _migrate_v1(connection)
+            if current < 2:
+                _migrate_v2(connection)
+            if connection.exec_driver_sql("PRAGMA foreign_key_check").first():
+                raise RuntimeError("Foreign key validation failed; migration rolled back")
+            connection.execute(text("UPDATE schema_version SET version = 2 WHERE id = 1"))
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 def init_db() -> None:
@@ -191,8 +270,8 @@ def init_db() -> None:
         legacy = _table_exists(connection, "groups") and not _table_exists(connection, "schema_version")
         pending = _table_exists(connection, "schema_version") and (
             connection.execute(text("SELECT version FROM schema_version WHERE id = 1")).scalar() or 0
-        ) < 1
+        ) < 2
     if legacy or pending:
         backup_database()
-    Base.metadata.create_all(bind=engine)
     migrate()
+    Base.metadata.create_all(bind=engine)
