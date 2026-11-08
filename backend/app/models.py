@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import secrets
 from datetime import datetime
 
@@ -38,7 +40,10 @@ class FileItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     group_id: Mapped[int] = mapped_column(
-        ForeignKey("groups.id", ondelete="CASCADE"), index=True
+        ForeignKey("groups.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    folder_id: Mapped[int] = mapped_column(
+        ForeignKey("folders.id", ondelete="CASCADE"), index=True, nullable=True
     )
     name: Mapped[str] = mapped_column(String(512))
     stored_name: Mapped[str] = mapped_column(String(64), unique=True)
@@ -52,6 +57,7 @@ class FileItem(Base):
     )
 
     group: Mapped[Group] = relationship(back_populates="files")
+    folder: Mapped["Folder"] = relationship(back_populates="files")
     share: Mapped["FileShare"] = relationship(
         back_populates="file",
         uselist=False,
@@ -75,6 +81,59 @@ class FileShare(Base):
     )
 
     file: Mapped[FileItem] = relationship(back_populates="share")
+
+
+class Folder(Base):
+    __tablename__ = "folders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int] = mapped_column(
+        ForeignKey("folders.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    parent: Mapped["Folder"] = relationship(
+        remote_side="Folder.id", back_populates="children"
+    )
+    children: Mapped[list[Folder]] = relationship(
+        back_populates="parent", cascade="all, delete-orphan"
+    )
+    files: Mapped[list[FileItem]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
+
+
+class Share(Base):
+    __tablename__ = "shares"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=gen_token)
+    target_type: Mapped[str] = mapped_column(String(16))
+    file_id: Mapped[int] = mapped_column(
+        ForeignKey("files.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    folder_id: Mapped[int] = mapped_column(
+        ForeignKey("folders.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    allow_edit: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    file: Mapped["FileItem"] = relationship()
+    folder: Mapped["Folder"] = relationship()
+
+
+class SchemaVersion(Base):
+    __tablename__ = "schema_version"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class SyncState(Base):
