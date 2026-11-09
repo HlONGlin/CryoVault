@@ -1,7 +1,7 @@
 import { Folder, Link2, LockKeyhole, Moon, Settings, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { treeApi } from "../api";
+import { filesApi } from "../api";
 import { useAuth } from "../auth";
 import { panelPath } from "../base";
 import { formatBytes } from "../lib/format";
@@ -15,7 +15,7 @@ export function Layout({ children }: {children: ReactNode}) {
   const [size, setSize] = useState<number | null>(null);
   const isPublic = pathname.startsWith("/s/") || pathname.startsWith("/f/");
   const admin = status === "unlocked" && !isPublic;
-  useEffect(() => { if (admin) treeApi.stats().then(s => setSize(s.total_size)).catch(() => setSize(null)); }, [admin, pathname]);
+  useEffect(() => { if (admin) filesApi.stats().then(s => setSize(s.total_size)).catch(() => setSize(null)); }, [admin, pathname]);
   const links = [{path: "/files", label: "文件", Icon: Folder}, {path: "/shares", label: "分享管理", Icon: Link2}, {path: "/settings", label: "设置", Icon: Settings}];
   return <div className="min-h-screen bg-app-bg text-app-text">
     <header className="flex h-14 items-center justify-between border-b border-app-border bg-app-panel px-4">

@@ -28,6 +28,5 @@ export function panelPath(path: string): string {
 
 /** Public share routes never live under the panel base. */
 export const publicPath = {
-  groupShare: (token: string) => `/s/${token}`,
-  fileShare: (token: string) => `/f/${token}`,
+  share: (token: string) => `/s/${token}`,
 };

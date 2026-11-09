@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import { AuthProvider, RequireAuth } from "./auth";
 import { PANEL_BASE, panelPath } from "./base";
@@ -25,6 +25,11 @@ function PageLoader() {
       <Loader2 className="h-5 w-5 animate-spin" />
     </div>
   );
+}
+
+function LegacyShareRedirect() {
+  const { token = "" } = useParams();
+  return <Navigate to={`/s/${token}`} replace />;
 }
 
 function AdminRoutes() {
@@ -75,7 +80,7 @@ export default function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/s/:token" element={<UnifiedSharePage />} />
-            <Route path="/f/:token" element={<UnifiedSharePage />} />
+            <Route path="/f/:token" element={<LegacyShareRedirect />} />
             <Route path={`${PANEL_BASE}/*`} element={<AdminRoutes />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
