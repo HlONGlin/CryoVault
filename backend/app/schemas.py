@@ -113,7 +113,7 @@ def to_public_file_share(share) -> PublicFileShare:
     )
 
 
-def to_group_out(g) -> GroupOut:
+def to_group_out(g, *, file_count: int = 0, total_size: int = 0) -> GroupOut:
     return GroupOut(
         id=g.id,
         name=g.name,
@@ -121,6 +121,6 @@ def to_group_out(g) -> GroupOut:
         share_token=g.share_token,
         allow_edit=g.allow_edit,
         created_at=g.created_at,
-        file_count=len(g.files),
-        total_size=sum(f.size for f in g.files),
+        file_count=file_count,
+        total_size=total_size,
     )

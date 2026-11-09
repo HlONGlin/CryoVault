@@ -186,14 +186,14 @@ def rename_file(file_id: int, payload: RenamePayload, db: Session = Depends(get_
     cleaned = name.replace("\\", "/").rsplit("/", 1)[-1].strip()
     if not cleaned:
         raise HTTPException(400, "Invalid name")
-    file.name = operations._unique_name(db, cleaned, folder_id, file.id)
-    if folder_id != file.folder_id:
-        # A moved file no longer belongs to its old legacy group. This also
-        # causes WebDAV to pause until its path mapping has been reconciled.
-        file.group_id = None
-    file.folder_id = folder_id
-    db.commit()
-    db.refresh(file)
+    with operations.TREE_WRITE_LOCK:
+        file.name = operations._unique_name(db, cleaned, folder_id, file.id)
+        if folder_id != file.folder_id:
+            # A moved file no longer belongs to its old legacy group.
+            file.group_id = None
+        file.folder_id = folder_id
+        db.commit()
+        db.refresh(file)
     return to_file_out(file)
 
 

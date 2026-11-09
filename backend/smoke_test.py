@@ -263,6 +263,7 @@ def check_direct_link_import() -> None:
     original_client = httpx.Client
 
     def mocked_client(**kwargs):
+        kwargs.pop("transport", None)
         transport = httpx.MockTransport(
             lambda _request: httpx.Response(
                 200,

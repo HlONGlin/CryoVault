@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from .. import operations
 from ..database import get_db
 from ..deps import require_admin
-from ..models import Folder, Group, Share
+from ..models import FileItem, Folder, Group, Share
 from ..schemas import GroupCreate, GroupOut, GroupUpdate, to_file_out, to_group_out
 from .folders import _clean_name, _unique_folder_name
 from ..share_security import contains_folder
@@ -17,6 +17,27 @@ router = APIRouter(
 )
 
 
+def _group_totals(db: Session, group_ids: list[int]) -> dict[int, tuple[int, int]]:
+    if not group_ids:
+        return {}
+    rows = (
+        db.query(
+            FileItem.group_id,
+            func.count(FileItem.id),
+            func.coalesce(func.sum(FileItem.size), 0),
+        )
+        .filter(FileItem.group_id.in_(group_ids))
+        .group_by(FileItem.group_id)
+        .all()
+    )
+    return {group_id: (count, size) for group_id, count, size in rows}
+
+
+def _group_out(db: Session, group: Group) -> GroupOut:
+    count, size = _group_totals(db, [group.id]).get(group.id, (0, 0))
+    return to_group_out(group, file_count=count, total_size=size)
+
+
 @router.get("", response_model=list[GroupOut])
 def list_groups(db: Session = Depends(get_db)):
     groups = (
@@ -25,33 +46,42 @@ def list_groups(db: Session = Depends(get_db)):
         .order_by(Group.created_at.desc())
         .all()
     )
-    return [to_group_out(g) for g in groups]
+    totals = _group_totals(db, [group.id for group in groups])
+    return [
+        to_group_out(
+            group,
+            file_count=totals.get(group.id, (0, 0))[0],
+            total_size=totals.get(group.id, (0, 0))[1],
+        )
+        for group in groups
+    ]
 
 
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
 def create_group(payload: GroupCreate, db: Session = Depends(get_db)):
-    name = _unique_folder_name(db, _clean_name(payload.name), None)
-    group = Group(
-        name=name,
-        description=payload.description,
-        allow_edit=payload.allow_edit,
-    )
-    db.add(group)
-    folder = Folder(name=name, description=payload.description)
-    db.add(folder)
-    db.flush()
-    db.add(Share(token=group.share_token, target_type="folder", folder_id=folder.id,
-                 allow_edit=group.allow_edit, created_at=group.created_at))
-    db.execute(text("INSERT INTO legacy_group_folders(group_id, folder_id) VALUES (:group_id, :folder_id)"),
-               {"group_id": group.id, "folder_id": folder.id})
-    db.commit()
-    db.refresh(group)
-    return to_group_out(group)
+    with operations.TREE_WRITE_LOCK:
+        name = _unique_folder_name(db, _clean_name(payload.name), None)
+        group = Group(
+            name=name,
+            description=payload.description,
+            allow_edit=payload.allow_edit,
+        )
+        db.add(group)
+        folder = Folder(name=name, description=payload.description)
+        db.add(folder)
+        db.flush()
+        db.add(Share(token=group.share_token, target_type="folder", folder_id=folder.id,
+                     allow_edit=group.allow_edit, created_at=group.created_at))
+        db.execute(text("INSERT INTO legacy_group_folders(group_id, folder_id) VALUES (:group_id, :folder_id)"),
+                   {"group_id": group.id, "folder_id": folder.id})
+        db.commit()
+        db.refresh(group)
+    return _group_out(db, group)
 
 
 @router.get("/{group_id}", response_model=GroupOut)
 def get_group(group_id: int, db: Session = Depends(get_db)):
-    return to_group_out(operations.get_group_or_404(db, group_id))
+    return _group_out(db, operations.get_group_or_404(db, group_id))
 
 
 @router.patch("/{group_id}", response_model=GroupOut)
@@ -61,28 +91,29 @@ def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_
                            {"id": group_id}).scalar()
     folder = db.get(Folder, folder_id) if folder_id is not None else None
     unified = db.query(Share).filter(Share.token == group.share_token).first()
-    if payload.name is not None:
-        group.name = _unique_folder_name(db, _clean_name(payload.name), folder.parent_id if folder else None,
-                                         folder.id if folder else None)
-        if folder:
-            folder.name = group.name
-    if payload.description is not None:
-        group.description = payload.description
-        if folder:
-            folder.description = payload.description
-    if payload.allow_edit is not None:
-        group.allow_edit = payload.allow_edit
-        if unified:
-            unified.allow_edit = payload.allow_edit
-    if payload.regenerate_token:
-        from ..models import gen_token
+    with operations.TREE_WRITE_LOCK:
+        if payload.name is not None:
+            group.name = _unique_folder_name(db, _clean_name(payload.name), folder.parent_id if folder else None,
+                                             folder.id if folder else None)
+            if folder:
+                folder.name = group.name
+        if payload.description is not None:
+            group.description = payload.description
+            if folder:
+                folder.description = payload.description
+        if payload.allow_edit is not None:
+            group.allow_edit = payload.allow_edit
+            if unified:
+                unified.allow_edit = payload.allow_edit
+        if payload.regenerate_token:
+            from ..models import gen_token
 
-        group.share_token = gen_token()
-        if unified:
-            unified.token = group.share_token
-    db.commit()
-    db.refresh(group)
-    return to_group_out(group)
+            group.share_token = gen_token()
+            if unified:
+                unified.token = group.share_token
+        db.commit()
+        db.refresh(group)
+    return _group_out(db, group)
 
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)

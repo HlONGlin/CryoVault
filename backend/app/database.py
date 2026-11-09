@@ -8,6 +8,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
 
+SCHEMA_VERSION = 4
+
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False, "timeout": 15},
@@ -260,6 +262,89 @@ def _migrate_v3(connection) -> None:
         names.add(candidate)
 
 
+def _install_name_guards(connection) -> None:
+    """Prevent races from creating two sibling nodes with the same name."""
+    if not (
+        _table_exists(connection, "files")
+        and _table_exists(connection, "folders")
+    ):
+        return
+    statements = (
+        """
+        CREATE TRIGGER IF NOT EXISTS files_unique_sibling_insert
+        BEFORE INSERT ON files
+        WHEN EXISTS (
+            SELECT 1 FROM files
+            WHERE COALESCE(folder_id, -1) = COALESCE(NEW.folder_id, -1)
+              AND name = NEW.name
+        ) OR EXISTS (
+            SELECT 1 FROM folders
+            WHERE COALESCE(parent_id, -1) = COALESCE(NEW.folder_id, -1)
+              AND name = NEW.name
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'sibling name conflict');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS files_unique_sibling_update
+        BEFORE UPDATE OF name, folder_id ON files
+        WHEN EXISTS (
+            SELECT 1 FROM files
+            WHERE id != OLD.id
+              AND COALESCE(folder_id, -1) = COALESCE(NEW.folder_id, -1)
+              AND name = NEW.name
+        ) OR EXISTS (
+            SELECT 1 FROM folders
+            WHERE COALESCE(parent_id, -1) = COALESCE(NEW.folder_id, -1)
+              AND name = NEW.name
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'sibling name conflict');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS folders_unique_sibling_insert
+        BEFORE INSERT ON folders
+        WHEN EXISTS (
+            SELECT 1 FROM folders
+            WHERE COALESCE(parent_id, -1) = COALESCE(NEW.parent_id, -1)
+              AND name = NEW.name
+        ) OR EXISTS (
+            SELECT 1 FROM files
+            WHERE COALESCE(folder_id, -1) = COALESCE(NEW.parent_id, -1)
+              AND name = NEW.name
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'sibling name conflict');
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS folders_unique_sibling_update
+        BEFORE UPDATE OF name, parent_id ON folders
+        WHEN EXISTS (
+            SELECT 1 FROM folders
+            WHERE id != OLD.id
+              AND COALESCE(parent_id, -1) = COALESCE(NEW.parent_id, -1)
+              AND name = NEW.name
+        ) OR EXISTS (
+            SELECT 1 FROM files
+            WHERE COALESCE(folder_id, -1) = COALESCE(NEW.parent_id, -1)
+              AND name = NEW.name
+        )
+        BEGIN
+            SELECT RAISE(ABORT, 'sibling name conflict');
+        END
+        """,
+    )
+    for statement in statements:
+        connection.execute(text(statement))
+
+
+def _migrate_v4(connection) -> None:
+    _install_name_guards(connection)
+
+
 def migrate() -> None:
     from . import models  # noqa: F401
 
@@ -270,7 +355,7 @@ def migrate() -> None:
             current = connection.execute(
                 text("SELECT version FROM schema_version WHERE id = 1")
             ).scalar() or 0
-        if current >= 3:
+        if current >= SCHEMA_VERSION:
             return
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
@@ -287,9 +372,14 @@ def migrate() -> None:
                 _migrate_v2(connection)
             if current < 3:
                 _migrate_v3(connection)
+            if current < 4:
+                _migrate_v4(connection)
             if connection.exec_driver_sql("PRAGMA foreign_key_check").first():
                 raise RuntimeError("Foreign key validation failed; migration rolled back")
-            connection.execute(text("UPDATE schema_version SET version = 3 WHERE id = 1"))
+            connection.execute(
+                text("UPDATE schema_version SET version = :version WHERE id = 1"),
+                {"version": SCHEMA_VERSION},
+            )
             connection.commit()
         except Exception:
             connection.rollback()
@@ -305,8 +395,17 @@ def init_db() -> None:
         legacy = _table_exists(connection, "groups") and not _table_exists(connection, "schema_version")
         pending = _table_exists(connection, "schema_version") and (
             connection.execute(text("SELECT version FROM schema_version WHERE id = 1")).scalar() or 0
-        ) < 3
+        ) < SCHEMA_VERSION
     if legacy or pending:
         backup_database()
-    migrate()
-    Base.metadata.create_all(bind=engine)
+    # Existing installations migrate their legacy tables before create_all.
+    # Fresh installations create the final schema first so its guards are in
+    # place as part of the same idempotent migration run.
+    if legacy:
+        migrate()
+        Base.metadata.create_all(bind=engine)
+    else:
+        Base.metadata.create_all(bind=engine)
+        migrate()
+    with engine.begin() as connection:
+        _install_name_guards(connection)

@@ -18,6 +18,7 @@ from .storage import is_text
 
 SYSTEM_GROUP_NAME = "单文件分享"
 _edit_lock = threading.Lock()
+TREE_WRITE_LOCK = threading.RLock()
 
 
 def stored_path(file: FileItem) -> Path:
@@ -117,6 +118,25 @@ def _unique_name(db: Session, name: str, folder_id: int | None, exclude_id: int 
         index += 1
 
 
+def safe_mime_type(name: str, declared: str | None = None) -> str:
+    """Choose a MIME type from the filename, with a tightly cleaned fallback."""
+    guessed = mimetypes.guess_type(name)[0]
+    if guessed:
+        return guessed
+    candidate = (declared or "").split(";", 1)[0].strip().lower()
+    if (
+        candidate
+        and len(candidate) <= 200
+        and candidate.count("/") == 1
+        and all(ch.isalnum() or ch in "!#$&^_.+-/" for ch in candidate)
+        and candidate.split("/", 1)[0]
+        in {"application", "audio", "font", "image", "model", "multipart", "text", "video"}
+        and not candidate.endswith(("+xml", "/xml", "/html", "/javascript"))
+    ):
+        return candidate
+    return "application/octet-stream"
+
+
 def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id: int | None = None) -> FileItem:
     raw_name = (upload.filename or "untitled").replace("\\", "/")
     original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
@@ -126,7 +146,6 @@ def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id:
         ).scalar()
     if folder_id is not None and db.get(Folder, folder_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
-    original_name = _unique_name(db, original_name, folder_id, group_id=group.id if group and folder_id is None else None)
     stored_name = uuid.uuid4().hex
     dest = settings.storage_dir / stored_name
     temp = settings.storage_dir / f".{stored_name}.upload"
@@ -144,11 +163,23 @@ def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id:
                     raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File exceeds the configured upload limit")
                 out.write(chunk)
         os.replace(temp, dest)
-        mime = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
-        file = FileItem(group_id=group.id if group else None, folder_id=folder_id, name=original_name,
-                        stored_name=stored_name, size=size, mime_type=mime)
-        db.add(file)
-        db.commit()
+        with TREE_WRITE_LOCK:
+            original_name = _unique_name(
+                db,
+                original_name,
+                folder_id,
+                group_id=group.id if group and folder_id is None else None,
+            )
+            file = FileItem(
+                group_id=group.id if group else None,
+                folder_id=folder_id,
+                name=original_name,
+                stored_name=stored_name,
+                size=size,
+                mime_type=safe_mime_type(original_name),
+            )
+            db.add(file)
+            db.commit()
         committed = True
         db.refresh(file)
         return file
@@ -176,7 +207,6 @@ def save_path(
         )
     raw_name = (name or "untitled").replace("\\", "/")
     original_name = raw_name.rsplit("/", 1)[-1].strip() or "untitled"
-    original_name = _unique_name(db, original_name, folder_id)
     stored_name = uuid.uuid4().hex
     destination = settings.storage_dir / stored_name
     committed = False
@@ -188,10 +218,12 @@ def save_path(
             name=original_name,
             stored_name=stored_name,
             size=size,
-            mime_type=mimetypes.guess_type(original_name)[0] or "application/octet-stream",
+            mime_type=safe_mime_type(original_name, mime_type),
         )
-        db.add(file)
-        db.commit()
+        with TREE_WRITE_LOCK:
+            file.name = _unique_name(db, file.name, folder_id)
+            db.add(file)
+            db.commit()
         committed = True
         db.refresh(file)
         return file
@@ -266,9 +298,10 @@ def write_text(db: Session, file: FileItem, content: str, etag: str | None = Non
 def rename_file(db: Session, file: FileItem, new_name: str) -> FileItem:
     cleaned = new_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
     if cleaned:
-        file.name = _unique_name(db, cleaned, file.folder_id, file.id)
-        db.commit()
-        db.refresh(file)
+        with TREE_WRITE_LOCK:
+            file.name = _unique_name(db, cleaned, file.folder_id, file.id)
+            db.commit()
+            db.refresh(file)
     return file
 
 

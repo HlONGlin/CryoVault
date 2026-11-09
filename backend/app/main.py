@@ -12,6 +12,7 @@ from . import __version__
 from .config import settings
 from .database import SessionLocal, get_db, init_db
 from .deps import require_admin
+from .errors import install_exception_handlers
 from .models import FileItem
 from .routers import admin, direct, file_share, files, folders, groups, share, shares, sync, update
 from .settings_store import load_saved_settings
@@ -40,6 +41,7 @@ app = FastAPI(
     openapi_url="/openapi.json" if _docs else None,
     lifespan=lifespan,
 )
+install_exception_handlers(app)
 
 if settings.cors_origins:
     app.add_middleware(

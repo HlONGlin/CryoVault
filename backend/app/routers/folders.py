@@ -43,8 +43,35 @@ def _clean_name(name: str) -> str:
     return cleaned
 
 
-def _folder_out(db: Session, folder: Folder):
-    count, size = db.query(func.count(FileItem.id), func.coalesce(func.sum(FileItem.size), 0)).filter(FileItem.folder_id == folder.id).one()
+def _folder_stats(db: Session, folder_ids: list[int]) -> dict[int, tuple[int, int]]:
+    if not folder_ids:
+        return {}
+    tree = select(
+        Folder.id.label("root_id"), Folder.id.label("descendant_id")
+    ).where(Folder.id.in_(folder_ids)).cte("folder_tree", recursive=True)
+    tree = tree.union_all(
+        select(tree.c.root_id, Folder.id).join(
+            tree, Folder.parent_id == tree.c.descendant_id
+        )
+    )
+    rows = db.execute(
+        select(
+            tree.c.root_id,
+            func.count(FileItem.id),
+            func.coalesce(func.sum(FileItem.size), 0),
+        )
+        .outerjoin(FileItem, FileItem.folder_id == tree.c.descendant_id)
+        .group_by(tree.c.root_id)
+    ).all()
+    return {root_id: (count, size) for root_id, count, size in rows}
+
+
+def _folder_out(
+    db: Session,
+    folder: Folder,
+    stats: dict[int, tuple[int, int]] | None = None,
+):
+    count, size = (stats or _folder_stats(db, [folder.id])).get(folder.id, (0, 0))
     return {"id": folder.id, "parent_id": folder.parent_id, "name": folder.name, "description": folder.description,
             "created_at": folder.created_at, "updated_at": folder.updated_at, "file_count": count, "total_size": size}
 
@@ -79,8 +106,9 @@ def list_contents(parent_id: int | None = None, page: int = Query(1, ge=1), page
     file_ids = [row["id"] for row in rows if row["type"] == "file"]
     folders = {folder.id: folder for folder in db.query(Folder).filter(Folder.id.in_(folder_ids)).all()}
     files = {file.id: file for file in db.query(FileItem).filter(FileItem.id.in_(file_ids)).all()}
+    stats = _folder_stats(db, folder_ids)
     items = [
-        {"type": "folder", **_folder_out(db, folders[row["id"]])}
+        {"type": "folder", **_folder_out(db, folders[row["id"]], stats)}
         if row["type"] == "folder" else
         {"type": "file", **to_file_out(files[row["id"]]).model_dump()}
         for row in rows
@@ -92,10 +120,17 @@ def list_contents(parent_id: int | None = None, page: int = Query(1, ge=1), page
 def create_folder(payload: FolderCreate, db: Session = Depends(get_db)):
     if payload.parent_id is not None and db.get(Folder, payload.parent_id) is None:
         raise HTTPException(404, "Parent folder not found")
-    folder = Folder(parent_id=payload.parent_id, name=_unique_folder_name(db, _clean_name(payload.name), payload.parent_id), description=payload.description)
-    db.add(folder)
-    db.commit()
-    db.refresh(folder)
+    with operations.TREE_WRITE_LOCK:
+        folder = Folder(
+            parent_id=payload.parent_id,
+            name=_unique_folder_name(
+                db, _clean_name(payload.name), payload.parent_id
+            ),
+            description=payload.description,
+        )
+        db.add(folder)
+        db.commit()
+        db.refresh(folder)
     return _folder_out(db, folder)
 
 
@@ -122,13 +157,16 @@ def update_folder(folder_id: int, payload: FolderUpdate, db: Session = Depends(g
         if cursor.id == folder.id:
             raise HTTPException(400, "Folder move would create a cycle")
         cursor = cursor.parent
-    folder.name = _unique_folder_name(
-        db, _clean_name(payload.name) if payload.name is not None else folder.name,
-        parent_id, folder.id,
-    )
-    folder.parent_id = parent_id
-    db.commit()
-    db.refresh(folder)
+    with operations.TREE_WRITE_LOCK:
+        folder.name = _unique_folder_name(
+            db,
+            _clean_name(payload.name) if payload.name is not None else folder.name,
+            parent_id,
+            folder.id,
+        )
+        folder.parent_id = parent_id
+        db.commit()
+        db.refresh(folder)
     return _folder_out(db, folder)
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
+import httpcore
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -29,19 +30,64 @@ class LinkImportPayload(BaseModel):
     name: str = Field(default="", max_length=512)
 
 
-def _validate_public_url(url: str) -> str:
+def _resolve_public_url(url: str) -> tuple[str, str]:
+    """Validate a URL and pin it to the address returned by this lookup."""
     parsed = urlsplit(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only HTTP and HTTPS links are supported")
     if parsed.username or parsed.password:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "URLs containing credentials are not allowed")
     try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
+        addresses = list(dict.fromkeys(
+            item[4][0]
+            for item in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        ))
     except OSError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Could not resolve the link host") from exc
     if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Links to private or local network addresses are not allowed")
+    return parsed.hostname.rstrip("."), addresses[0]
+
+
+def _validate_public_url(url: str) -> str:
+    """Backward-compatible validation helper used by smoke tests."""
+    _resolve_public_url(url)
     return url
+
+
+def _normalized_host(host: str) -> str:
+    return host.rstrip(".").encode("idna").decode("ascii").lower()
+
+
+class _PinnedSyncBackend(httpcore.SyncBackend):
+    """Connect to a validated IP while retaining the URL hostname."""
+
+    def __init__(self, host: str, address: str) -> None:
+        super().__init__()
+        self._host = _normalized_host(host)
+        self._address = address
+
+    def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        if _normalized_host(host) != self._host:
+            raise OSError("Link download attempted to connect to an unexpected host")
+        return super().connect_tcp(
+            self._address,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+
+class _PinnedTransport(httpx.HTTPTransport):
+    def __init__(self, host: str, address: str) -> None:
+        # Proxy environment variables must not bypass address validation.
+        super().__init__(trust_env=False)
+        self._pool._network_backend = _PinnedSyncBackend(host, address)
 
 
 def _download_name(response: httpx.Response, url: str, requested_name: str) -> str:
@@ -61,9 +107,10 @@ def _download_name(response: httpx.Response, url: str, requested_name: str) -> s
 def _download_link(url: str, destination: Path) -> tuple[str, str]:
     current = url
     timeout = httpx.Timeout(30.0, connect=10.0)
-    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-        for redirect in range(6):
-            _validate_public_url(current)
+    for redirect in range(6):
+        host, address = _resolve_public_url(current)
+        transport = _PinnedTransport(host, address)
+        with httpx.Client(timeout=timeout, follow_redirects=False, transport=transport) as client:
             with client.stream("GET", current) as response:
                 if response.is_redirect:
                     if redirect == 5:
