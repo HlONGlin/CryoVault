@@ -1,346 +1,58 @@
 <div align="center">
 
-# CryoVault
+# CryoVault v0.3.0
 
-> 当前重构分支尚未达到 v0.3.0 发布验收条件。WebDAV 同步已暂停，旧同步状态和远端文件会保留；不要将此分支用于生产升级。迁移与回滚细节见 [重构方案](docs/REFACTOR_PLAN.md) 和 [架构说明](docs/ARCHITECTURE.md)。
+**单管理员、自托管、低维护成本的文件分享工具。**
 
-**一个专注于本地存储、快速分享和文件预览的轻量级自托管网盘。**
-
-管理端使用令牌保护，文件和文件夹可通过分享链接交付给其他人，无需登录。文件以明文保存在自己的磁盘上。
-
-<br />
-
-![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18-149eca?style=flat-square&logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-local-003B57?style=flat-square&logo=sqlite&logoColor=white)
+文件保存在自有服务器的磁盘上；管理端使用统一的文件夹树、文件预览与分享管理，公开访客通过 `/s/<token>` 浏览或下载被分享的内容。
 
 </div>
 
 ## 目录
 
-- [项目定位](#项目定位)
-- [一键部署（推荐）](#一键部署推荐)
-- [功能概览](#功能概览)
-- [运行架构](#运行架构)
+- [功能](#功能)
 - [快速启动](#快速启动)
-- [管理与分享](#管理与分享)
-- [配置项](#配置项)
-- [开发命令](#开发命令)
-- [生产部署](#生产部署)
+- [一键部署](#一键部署)
+- [从 v0.2.2 升级](#从-v022-升级)
+- [回滚](#回滚)
+- [路由与 API](#路由与-api)
+- [配置](#配置)
+- [WebDAV](#webdav)
+- [开发与测试](#开发与测试)
 - [项目结构](#项目结构)
-- [后续规划](#后续规划)
+- [安全边界](#安全边界)
+- [已知限制](#已知限制)
 
-## 项目定位
+## 功能
 
-CryoVault 适合以下场景：
-
-- 在家用服务器、NAS 或 Linux 小主机上保存个人文件
-- 为一组资料生成一个公开浏览入口
-- 临时分享单个文件，不想为了一个文件创建完整目录
-- 在浏览器中预览图片、音视频和常见文本文件
-- 需要一个简单、可控、数据留在本地的文件交付工具
-
-它不是面向多租户团队协作的企业网盘，当前重点是单管理员、自托管和低维护成本。
-
-## 一键部署（推荐）
-
-适用于支持 `systemd` 的 Linux 服务器。脚本会自动检查运行环境、安装 Python / Node.js 依赖、构建前端、创建服务用户、写入配置，并注册 `cryovault.service`。当前 systemd 单元没有指定 `User=`，服务实际以 root 运行；网页内更新也以该权限执行从 GitHub 获取的脚本，请仅在信任更新来源时启用。
-
-```bash
-bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
-```
-
-脚本会进入交互式管理菜单：
-
-| 选项 | 操作 |
-| --- | --- |
-| `1` | 安装或更新 CryoVault |
-| `2` | 启动服务 |
-| `3` | 停止服务 |
-| `4` | 卸载并清除全部数据 |
-| `5` | 重置管理员令牌，保留文件 |
-| `6` | 重新生成管理访问路径 |
-| `0` | 退出菜单 |
-
-首次安装时，脚本会让你设置管理员令牌；直接回车则自动生成。安装完成后会打印完整管理地址和令牌，请妥善保存：
-
-```text
-管理地址：http://服务器IP:8000/panel/随机路径
-管理员令牌：安装时设置或自动生成的令牌
-```
-
-脚本默认使用以下路径：
-
-| 内容 | 路径 |
-| --- | --- |
-| 程序 | `/opt/cryovault` |
-| 文件、数据库和配置 | `/var/lib/cryovault` |
-| systemd 服务 | `cryovault.service`（以 root 运行，支持网页内一键更新） |
-
-> 卸载操作会删除程序、上传文件、数据库、令牌和配置，并要求输入 `DELETE` 二次确认。重置令牌和重新生成访问路径不会删除文件。
-
-脚本源码位于仓库根目录：[one-click.sh](./one-click.sh)。
-
-## 功能概览
-
-### 文件管理
-
-- 分组保险库：为不同主题建立独立的文件空间
-- 直接上传：不创建分组也可以保存并分享文件
-- 点击或拖拽上传，支持批量选择
-- 上传进度显示与取消上传
-- 文件名搜索、类型筛选、名称/大小/修改时间排序
-- 网格视图与列表视图，可记住浏览器中的选择
-- 图片预览与缩放
-- 视频、音频浏览器内播放
-- TXT、Markdown、JSON、YAML 和常见代码文件在线查看与编辑
-- 单个删除、批量删除、重命名
-- 选择多个文件后打包下载 ZIP
-
-### 分享交付
-
-- 分组分享链接：一次分享一个文件空间
-- 单文件分享链接：直接交付一个文件
-- 分享链接可生成二维码并下载 PNG
-- 分享页无需管理员登录
-- 文本文件可以按分享权限开启在线编辑
-- 可以随时撤销单文件链接，或重新生成分组链接
-
-### 管理与安全
-
-- 管理端使用管理员令牌解锁
-- 登录后由 HttpOnly 会话 Cookie 维持状态
-- 管理端可以使用随机路径隐藏入口
-- 管理 API 与公开分享 API 分开
-- 支持登录失败限流
-- 支持浅色和深色主题
-- 根路径在启用管理路径时默认返回 404
-
-### 在线更新
-
-- 管理员登录后自动检查 GitHub 上的最新版本；有新版时顶栏出现闪烁的「更新 x.y.z」按钮
-- 未登录时同样会检查并显示按钮，点击会提示先解锁
-- 弹窗内展示当前版本、最新版本、发布说明与更新日志
-- 「立即更新」由后端调用已安装的一键脚本 `--update-only` 覆盖升级并重启服务，页面自动刷新
-- 「跳过此版本」只在当前浏览器记住该版本，不会再次主动弹出
-- 「检查更新」可随时手动重新查询
-- 在线更新仅在 Linux + systemd 一键安装的部署中可用；其他部署会显示原因并给出 GitHub 链接
-
-## 运行架构
-
-```mermaid
-flowchart LR
-    Browser[浏览器] -->|管理端 / 分享页| FastAPI[FastAPI]
-    FastAPI --> SQLite[(SQLite 元数据)]
-    FastAPI --> Storage[本地文件存储]
-    FastAPI --> Session[HttpOnly 会话]
-    FastAPI --> Public[公开分享接口]
-```
-
-项目由两个部分组成：
-
-| 部分 | 技术 | 作用 |
-| --- | --- | --- |
-| 后端 | Python、FastAPI、SQLAlchemy | 鉴权、文件 API、分享 API、静态文件托管 |
-| 前端 | React、TypeScript、Vite、Tailwind CSS | 管理控制台、文件预览、分享页面 |
-| 数据 | SQLite | 分组、文件元数据、分享令牌 |
-| 文件 | 本地目录 | 保存上传文件的实际内容 |
-
-默认数据目录为 `backend/data`，其中包含 SQLite 数据库和 `storage` 文件目录。
+- 统一的嵌套文件夹树；文件和文件夹都在同一个浏览器中上传、搜索、排序、移动、重命名、删除和分享。
+- 同一父目录下名称唯一；上传或重名时自动生成 `name (2)` 一类名称。
+- 支持拖拽上传、分页、搜索、名称/大小/时间排序、列表/网格视图、多选和 ZIP 打包下载。
+- 支持从外部链接导入文件到指定目录；下载端使用已解析并校验过的 IP，禁止代理环境绕过地址校验。
+- 图片、音视频和文本预览；常见文本和代码文件可在浏览器内编辑。
+- 文件与文件夹使用统一的分享模型，可设置编辑权限、可选密码和可选过期时间。
+- 分享管理页可查看全部链接、修改权限/有效期/密码、复制链接、显示二维码并撤销。
+- `/s/<token>` 同时处理文件和文件夹分享；旧 `/f/<token>` 会重定向到同一页面。
+- 桌面侧栏、面包屑、工具栏和移动端抽屉导航；保留中文界面、深浅色主题。
+- 可选 WebDAV 双向同步，远端路径以文件 ID 为稳定标识。
 
 ## 快速启动
 
-### Linux / macOS
+要求 Python 3.10+、Node.js 18+ 和 npm。
+
+### 本地脚本
 
 ```bash
-chmod +x start.sh
 ./start.sh
 ```
 
-首次启动会自动：
-
-1. 创建 Python 虚拟环境
-2. 安装后端依赖
-3. 安装前端依赖
-4. 构建前端
-5. 生成管理员令牌和管理端路径
-6. 启动 FastAPI 服务
-
-启动完成后，终端会显示类似信息：
-
-```text
-管理地址：http://127.0.0.1:8000/panel/随机路径
-管理员令牌：请使用终端实际显示的令牌
-```
-
-启用随机管理路径后，必须使用完整的管理地址。访问 `/` 返回 404 是正常行为。
-
-### Windows 开发环境
-
-后端：
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-$env:CRYOVAULT_ADMIN_TOKEN = "your-test-token"
-$env:CRYOVAULT_PANEL_PATH = "/panel/dev"
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-前端另开一个终端：
-
-```powershell
-cd frontend
-npm install
-npm run dev -- --host 0.0.0.0
-```
-
-前端开发服务器默认使用 `http://localhost:5173`，并将 `/api` 请求代理到后端。
-
-### 启动脚本参数
+脚本会创建 `backend/.venv`、安装依赖、构建前端，然后由 Uvicorn 在 8000 端口同时提供 API 和前端。开发时使用：
 
 ```bash
-./start.sh 9000          # 使用 9000 端口启动单服务
-./start.sh --print-url   # 只打印当前管理地址和管理员令牌
-./start.sh --dev         # 启动 Vite + FastAPI 开发模式
-./start.sh --help        # 查看帮助
+./start.sh --dev
 ```
 
-## 管理与分享
-
-### 管理员解锁
-
-打开启动脚本打印的管理地址，输入 `CRYOVAULT_ADMIN_TOKEN` 对应的令牌即可解锁。右上角的锁定按钮会注销当前管理会话。
-
-管理端不会把令牌写入 URL。登录失败默认受限流保护，具体次数和窗口可以通过配置项调整。
-
-### 分组分享
-
-1. 创建一个分组。
-2. 进入分组并上传文件。
-3. 点击分组分享按钮。
-4. 复制链接或下载二维码。
-
-### 单文件分享
-
-1. 在管理首页的“直接上传”区域上传文件。
-2. 在文件卡片或列表操作区打开分享面板。
-3. 复制下载链接或生成二维码。
-4. 需要时撤销链接，旧链接会立即失效。
-
-分享页面使用 `/s/<token>`，单文件页面使用 `/f/<token>`。两类公开页面都不需要管理员令牌。
-
-## WebDAV 双向同步
-
-CryoVault 支持通过 WebDAV 与 Nextcloud、坚果云等服务进行双向同步。同步凭据只在后端读取，管理页面不会显示密码。
-
-WebDAV 密码使用数据目录中的 `.webdav-settings.key` 加密；备份时请连同数据目录一起保留该密钥，若丢失则需重新输入密码。
-
-在 `backend/.env` 中配置：
-
-```dotenv
-CRYOVAULT_WEBDAV_ENABLED=true
-CRYOVAULT_WEBDAV_URL=https://cloud.example.com/remote.php/dav/files/user
-CRYOVAULT_WEBDAV_USERNAME=user
-CRYOVAULT_WEBDAV_PASSWORD=应用专用密码
-CRYOVAULT_WEBDAV_ROOT=/CryoVault
-CRYOVAULT_WEBDAV_INTERVAL_SECONDS=900
-CRYOVAULT_WEBDAV_CONFLICT_POLICY=keep_both
-```
-
-远端文件按 `groups/<分组 ID>/<文件 ID>-<文件名>` 保存。首次同步时，远端和本地同时存在的文件按修改时间决定来源；之后会同步新增、修改、删除和重命名。
-
-冲突策略支持 `keep_both`（保留远端版本为本地冲突副本）、`local_wins` 和 `remote_wins`。管理面板中的 WebDAV 卡片可以测试连接或立即同步；接口为 `GET /api/admin/sync/status`、`POST /api/admin/sync/test` 和 `POST /api/admin/sync/run`。
-
-直链导入位于管理首页“直接上传”区域。系统仅允许从可公开访问的 HTTP/HTTPS 地址下载，并遵守 `CRYOVAULT_MAX_UPLOAD_SIZE` 限制；文件默认进入单文件分享区。
-
-## 配置项
-
-开发模式通常使用 `backend/.env`。所有环境变量均使用 `CRYOVAULT_` 前缀。
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `CRYOVAULT_DATA_DIR` | `data` | SQLite 数据库和上传文件目录 |
-| `CRYOVAULT_ADMIN_TOKEN` | 空 | 管理员令牌；为空时不要求解锁 |
-| `CRYOVAULT_PANEL_PATH` | 空 | 管理端路径，例如 `/panel/abc123` |
-| `CRYOVAULT_BASE_URL` | `http://localhost:5173` | 外部系统使用的前端地址 |
-| `CRYOVAULT_MAX_UPLOAD_SIZE` | `0` | 单文件上传上限，单位为字节；0 表示不限 |
-| `CRYOVAULT_MAX_TEXT_EDIT_SIZE` | `5242880` | 在线编辑器允许处理的最大文本大小 |
-| `CRYOVAULT_COOKIE_SECURE` | `false` | 使用 HTTPS 时建议设为 `true` |
-| `CRYOVAULT_SESSION_MAX_AGE` | `2592000` | 管理会话最长有效期，单位为秒 |
-| `CRYOVAULT_LOGIN_MAX_ATTEMPTS` | `5` | 登录限流窗口内允许的失败次数 |
-| `CRYOVAULT_LOGIN_WINDOW_SECONDS` | `300` | 登录限流窗口，单位为秒 |
-| `CRYOVAULT_DOCS_ENABLED` | `true` | 是否开放 `/docs` 和 `/openapi.json` |
-| `CRYOVAULT_CORS_ORIGINS` | `[]` | 额外允许的跨域来源列表 |
-| `CRYOVAULT_TRUST_PROXY_HEADERS` | `false` | 反向代理部署时是否信任转发头 |
-| `CRYOVAULT_UPDATE_ENABLED` | `false` | 是否允许在网页内执行在线更新；一键脚本会自动设为 `true` |
-| `CRYOVAULT_UPDATE_COMMAND` | 空 | 更新脚本命令，一键脚本写为 `/opt/cryovault/one-click.sh` |
-| `CRYOVAULT_INSTALL_DIR` | 自动推断 | 安装目录，用于定位更新脚本和 `VERSION` |
-| `CRYOVAULT_UPDATE_REPO` | `HlONGlin/CryoVault` | 检查更新使用的 GitHub 仓库 |
-| `CRYOVAULT_UPDATE_BRANCH` | `main` | 没有 GitHub Release 时读取 `VERSION` 的分支 |
-| `CRYOVAULT_UPDATE_CHECK_TIMEOUT` | `6` | 访问 GitHub 的超时时间，单位为秒 |
-| `CRYOVAULT_GITHUB_TOKEN` | 空 | 可选，用于提高 GitHub API 匿名请求限额 |
-| `CRYOVAULT_WEBDAV_ENABLED` | `false` | 是否开启双向 WebDAV 自动同步 |
-| `CRYOVAULT_WEBDAV_URL` | 空 | WebDAV 服务地址，例如 Nextcloud 的远程文件地址 |
-| `CRYOVAULT_WEBDAV_USERNAME` | 空 | WebDAV 用户名 |
-| `CRYOVAULT_WEBDAV_PASSWORD` | 空 | WebDAV 密码或应用密码，仅在服务端环境中设置 |
-| `CRYOVAULT_WEBDAV_ROOT` | `/CryoVault` | 远程文件夹根路径 |
-| `CRYOVAULT_WEBDAV_INTERVAL_SECONDS` | `900` | 自动同步间隔，单位为秒；设置为 `0` 可关闭调度 |
-| `CRYOVAULT_WEBDAV_CONFLICT_POLICY` | `keep_both` | 冲突策略：`keep_both`、`local_wins` 或 `remote_wins` |
-| `CRYOVAULT_WEBDAV_VERIFY_TLS` | `true` | 是否验证 WebDAV HTTPS 证书 |
-| `CRYOVAULT_WEBDAV_TIMEOUT` | `60` | 单次 WebDAV 请求超时，单位为秒 |
-> `CRYOVAULT_UPDATE_COMMAND` 只允许指向安装目录内的脚本，且只接受 `--port`、`--panel-path` 两个参数，脚本必须包含 `--update-only` 入口，避免该配置被用来执行任意命令。在线更新要求 CryoVault 服务以 root 运行（一键脚本生成的 systemd 单元不再指定 `User=`），因为安装过程需要写入 `/opt/cryovault`、安装系统软件包并重启服务。若服务以普通用户运行，更新对话框会直接提示如何修改 systemd 单元；在禁止提权的容器（`no_new_privs`）中请改为在宿主机执行 `sudo bash /opt/cryovault/one-click.sh --update-only`。
-
-生产环境至少应设置：
-
-```dotenv
-CRYOVAULT_ADMIN_TOKEN=一段随机长令牌
-CRYOVAULT_PANEL_PATH=/panel/一段随机路径
-CRYOVAULT_COOKIE_SECURE=true
-CRYOVAULT_DOCS_ENABLED=false
-```
-
-## 开发命令
-
-构建前端：
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-只做 TypeScript 检查：
-
-```bash
-cd frontend
-npm run typecheck
-```
-
-运行后端冒烟测试：
-
-```bash
-cd backend
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-python smoke_test.py
-```
-
-Windows PowerShell 激活虚拟环境时使用：
-
-```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-python smoke_test.py
-```
-
-## 生产部署
-
-可以让 FastAPI 直接托管 `frontend/dist`：
+### 手动启动
 
 ```bash
 cd frontend
@@ -351,19 +63,209 @@ cd ../backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-更适合长期运行的方式是使用 Nginx 或 Caddy 放在前面处理 HTTPS，再将请求转发到 Uvicorn。建议：
+首次启动会创建 `backend/data/cryovault.db` 和 `backend/data/storage/`。新建安装不需要迁移旧数据。
 
-- 使用随机、足够长的管理员令牌
-- 设置随机 `CRYOVAULT_PANEL_PATH`
-- 开启 HTTPS 后设置 `CRYOVAULT_COOKIE_SECURE=true`
-- 关闭不需要的 API 文档
-- 定期备份 `CRYOVAULT_DATA_DIR`
-- 不把 `backend/data` 目录直接暴露给 Web 服务器
+`CRYOVAULT_PANEL_PATH` 为空时，管理端可从 `/login` 和 `/files` 访问；设置随机面板路径后，管理端位于 `<panel-path>/files`，根路径返回 404。分享页始终使用公开的 `/s/` 地址。
 
-一键安装和服务管理请参阅前面的[一键部署](#一键部署推荐)章节。
+## 一键部署
+
+一键脚本适用于支持 `systemd` 的 Linux：
+
+```bash
+bash <(curl -fsSL https://github.com/HlONGlin/CryoVault/raw/main/one-click.sh)
+```
+
+脚本进入交互菜单，支持安装/更新、启停、卸载、重置管理员令牌和重新生成面板路径。默认位置如下：
+
+| 内容 | 路径 |
+| --- | --- |
+| 程序 | `/opt/cryovault` |
+| 数据、SQLite 数据库、文件存储和配置 | `/var/lib/cryovault` |
+| systemd 单元 | `/etc/systemd/system/cryovault.service` |
+
+脚本会创建 `cryovault` 系统账号并用于数据文件所有权，但**当前生成的 systemd 单元没有 `User=`，因此服务进程实际以 root 运行**。这是为了让网页内更新能够执行安装、写入 `/opt/cryovault` 并重启系统服务。网页更新会以 root 执行从配置的 GitHub 仓库拉取的安装脚本，只应在信任该更新来源时启用 `CRYOVAULT_UPDATE_ENABLED`。
+
+`start.sh` 的用法保持不变；本次重构没有删除或重命名现有环境变量。
+
+## 从 v0.2.2 升级
+
+升级会修改 SQLite 元数据，但不会移动或重命名 `storage_dir` 中的已存文件。应用在首次执行 v0.3.0 迁移前，会用 SQLite backup API 创建与数据库同目录的备份：
+
+```text
+cryovault.db.pre-v0.3.0-YYYYMMDDTHHMMSSZ.bak
+```
+
+仍建议在升级前对整个数据目录做独立备份，并先在副本上演练。systemd 安装可以执行：
+
+```bash
+sudo systemctl stop cryovault
+sudo cp -a /var/lib/cryovault "/var/lib/cryovault.pre-v0.3.0-$(date +%Y%m%d-%H%M%S)"
+sudo systemctl start cryovault
+```
+
+然后通过一键脚本选择“安装或更新”，或在已校验的源码目录执行部署流程。升级后应检查：
+
+1. `/api/health` 返回 `0.3.0`。
+2. 管理端文件树可以浏览原有文件；原系统分组中的文件位于根目录。
+3. 旧 `/s/<token>`、`/f/<token>`、`/api/share/<token>` 和 `/api/file-share/<token>` 链接仍有效。
+4. 分享管理页能显示旧分组和旧文件分享，权限与 token 没有变化。
+5. 启用了 WebDAV 时，先检查同步设置和日志，再执行一次手动同步。
+
+迁移规则：
+
+- 每个旧非系统 `Group` 转为根目录下同名 `Folder`；重名会自动编号。
+- 原系统分组中的文件转为根目录文件。
+- 旧 `Group.share_token` 和 `FileShare.share_token` 原样写入统一 `Share`，不会重新生成 token。
+- 旧分组 `description` 保存在 `Folder.description`。
+- 旧 `Group`、`FileShare` 和映射表只为兼容旧 API 保留；新界面和公开页只通过统一树与分享模型工作。
+
+## 回滚
+
+不要只恢复数据库而忽略升级后新增的文件。安全回滚方式如下：
+
+```bash
+sudo systemctl stop cryovault
+sudo cp -a /var/lib/cryovault "/var/lib/cryovault.after-v0.3.0-$(date +%Y%m%d-%H%M%S)"
+sudo rm -rf /var/lib/cryovault
+sudo cp -a /var/lib/cryovault.pre-v0.3.0-YYYYMMDD-HHMMSS /var/lib/cryovault
+# 将 /opt/cryovault 恢复到 v0.2.2 程序
+sudo systemctl start cryovault
+```
+
+`after-v0.3.0-*` 目录保留升级后的数据库与文件，必须先保留它再恢复旧快照。也可以只替换迁移前数据库备份，但升级后新增或修改的文件不会出现在 v0.2.2 数据库中；需要从升级后的完整备份单独取回。
+
+## 路由与 API
+
+前端路由：
+
+| 路由 | 用途 |
+| --- | --- |
+| `/files/:folderId?` | 统一文件树 |
+| `/shares` | 分享管理 |
+| `/settings` | WebDAV、更新与设置 |
+| `/login` | 管理登录 |
+| `/s/:token` | 文件/文件夹公开分享 |
+| `/f/:token` | 旧文件分享兼容重定向 |
+
+管理 API 统一使用当前登录会话。核心接口：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/admin/session` | 用 `X-Admin-Token` 换取短期 HttpOnly 会话 |
+| `DELETE` | `/api/admin/session` | 服务端吊销当前会话 |
+| `GET` | `/api/folders?parent_id=&page=&page_size=&sort=&order=&q=` | 列出目录内容 |
+| `POST` | `/api/folders` | 新建文件夹 |
+| `GET` | `/api/folders/{id}` | 文件夹、面包屑与子树统计 |
+| `PATCH` | `/api/folders/{id}` | 重命名或移动文件夹 |
+| `DELETE` | `/api/folders/{id}` | 递归删除文件夹 |
+| `POST` | `/api/files` | 上传一个或多个文件到 `folder_id` |
+| `POST` | `/api/files/import` | 从 URL 导入到指定目录 |
+| `POST` | `/api/files/archive` | 将选中的文件/文件夹打包为 ZIP |
+| `PATCH` | `/api/files/{id}` | 重命名或移动文件 |
+| `DELETE` | `/api/files/{id}` | 删除文件 |
+| `GET` | `/api/files/{id}/download` | 下载；支持 Range |
+| `GET` | `/api/files/{id}/raw` | 内联读取；支持 Range |
+| `GET` | `/api/files/{id}/content` | 读取可编辑文本和 ETag |
+| `PUT` | `/api/files/{id}/content` | 用 ETag 乐观锁保存文本 |
+| `GET` | `/api/shares` | 列出全部分享 |
+| `POST` | `/api/shares` | 为文件或文件夹创建分享 |
+| `PATCH` | `/api/shares/{id}` | 修改编辑权限、过期时间和密码 |
+| `DELETE` | `/api/shares/{id}` | 立即撤销分享 |
+| `GET` | `/api/public/shares/{token}` | 获取公开分享信息 |
+| `POST` | `/api/public/shares/{token}/unlock` | 校验分享密码 |
+| `GET` | `/api/public/shares/{token}/folders` | 浏览分享文件夹子树 |
+| `GET` | `/api/public/shares/{token}/files/{id}/download` | 下载分享文件 |
+| `GET` | `/api/stats` | 全局文件数与占用空间 |
+| `GET` | `/api/health` | 运行版本与健康检查 |
+
+创建分享的请求示例：
+
+```json
+{
+  "target_type": "folder",
+  "folder_id": 12,
+  "allow_edit": false,
+  "expires_at": "2026-12-31T23:59:59Z",
+  "password": "optional-password"
+}
+```
+
+公开文件夹 API 的每个请求都重新验证分享状态、密码 cookie、过期时间以及目标文件夹是否仍在分享根目录子树内。共享 token 本身不等于任意节点访问权限。
+
+兼容接口 `/api/share/...`、`/api/file-share/...`、`/api/groups/...` 和 `/api/direct/...` 保留用于旧客户端；新前端不再调用这些入口。
+
+## 配置
+
+配置文件示例见 `backend/.env.example`。常用变量：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `CRYOVAULT_DATA_DIR` | `./data` | SQLite、共享文件和迁移备份所在目录 |
+| `CRYOVAULT_BASE_URL` | `http://localhost:5173` | 生成公开链接时使用的外部地址 |
+| `CRYOVAULT_ADMIN_TOKEN` | 空 | 管理令牌；留空时管理 API 不要求认证 |
+| `CRYOVAULT_MAX_UPLOAD_SIZE` | `0` | 单文件上限，0 表示不限制 |
+| `CRYOVAULT_MAX_TEXT_EDIT_SIZE` | `5242880` | 浏览器文本编辑器的最大字节数 |
+| `CRYOVAULT_SESSION_MAX_AGE` | `2592000` | 管理会话有效期，单位秒 |
+| `CRYOVAULT_COOKIE_SECURE` | `false` | HTTPS 部署应设为 `true` |
+| `CRYOVAULT_PANEL_PATH` | 空 | 管理端随机路径，例如 `/panel/随机值` |
+| `CRYOVAULT_DOCS_ENABLED` | `false` | 是否公开 `/docs` 与 `/openapi.json` |
+| `CRYOVAULT_TRUST_PROXY_HEADERS` | `false` | 仅在可信反向代理后开启 |
+| `CRYOVAULT_CORS_ORIGINS` | `[]` | 额外允许的前端来源 |
+| `CRYOVAULT_UPDATE_ENABLED` | `false` | 是否允许网页执行安装脚本 |
+| `CRYOVAULT_UPDATE_COMMAND` | 空 | 仅允许安装目录内的一键脚本 |
+| `CRYOVAULT_WEBDAV_ENABLED` | `false` | 是否启动定时双向同步 |
+
+生产环境至少设置长随机管理员令牌、随机面板路径和 `CRYOVAULT_COOKIE_SECURE=true`，并通过 HTTPS 暴露服务。若管理员令牌为空，应用仍会启动，但会输出明显安全警告，且管理 API 对能访问服务的人开放；不要以这种状态监听公网。
+
+依赖说明：固定 `httpcore==1.0.9`，是因为外链导入需要让 TLS 连接真正使用已经完成公网地址校验的解析结果，避免校验与实际连接之间的 DNS 重绑定窗口。项目没有引入 ORM 或迁移框架等重型新依赖；版本化迁移使用现有 SQLAlchemy 与 SQLite `schema_version` 表。
+
+## WebDAV
+
+WebDAV 设置保存在数据库中，密码由服务端加密保存且不会通过 API 返回。现有 v0.2.2 `SyncState` 行会保留，旧 `groups/<group-id>/<file-id>-<name>` 路径继续映射原文件，不会因升级自动重复上传或删除。
+
+- 新文件使用 `files/<file-id>-<name>`；文件 ID 在目录移动后保持不变，因此文件夹移动不会触发远端搬家。
+- 文件重命名会安全 MOVE 旧远端对象到稳定新路径，并立即保存新路径。
+- 无法由本地文件 ID 认领的远端未知文件会保留并记为跳过，不会被静默删除。
+- 远端删除、冲突和本地提交失败都有测试覆盖；本地文件替换采用暂存文件，数据库提交成功后才删除旧文件。
+- 升级前仍应备份整个数据目录。升级后先执行手动同步并检查报告；若有异常，停止服务、保存升级后数据，再按上面的回滚步骤处理。
+
+WebDAV 继续支持设置页中的连接测试、状态与手动运行。服务只应由单个进程运行，避免两个调度器同时修改同一数据。
+
+## 开发与测试
+
+后端：
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Windows PowerShell：
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+前端：
+
+```bash
+cd frontend
+npm ci
+npm run typecheck
+npm run build
+```
+
+GitHub Actions 会在推送和拉取请求上分别执行 pytest、TypeScript 检查和前端生产构建。
 
 ## 项目结构
 
@@ -371,34 +273,43 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 CryoVault/
 ├─ backend/
 │  ├─ app/
-│  │  ├─ routers/       # 管理、文件、分组和分享 API
-│  │  ├─ models.py      # SQLAlchemy 数据模型
-│  │  ├─ operations.py  # 文件保存、读取、删除和分享逻辑
-│  │  └─ main.py        # FastAPI 应用与静态前端托管
-│  └─ smoke_test.py     # 后端冒烟测试
+│  │  ├─ routers/       # 管理会话、文件夹、文件、分享、同步和更新 API
+│  │  ├─ models.py      # Folder/FileItem/Share 及兼容旧 token 的数据表
+│  │  ├─ database.py    # schema_version、幂等迁移与迁移前备份
+│  │  ├─ operations.py  # 原子保存、唯一命名、文本编辑和树操作
+│  │  ├─ webdav.py      # WebDAV 客户端、映射和同步调度
+│  │  └─ main.py        # FastAPI 应用与按需加载的 SPA 静态托管
+│  ├─ tests/            # pytest 回归测试
+│  ├─ requirements.txt
+│  └─ requirements-dev.txt
 ├─ frontend/
-│  ├─ src/
-│  │  ├─ components/    # 文件浏览器、分享面板、预览和编辑器
-│  │  ├─ pages/         # 管理页、分组页和公开分享页
-│  │  └─ api.ts         # 前端 API 客户端
-│  └─ public/assets/    # favicon 等静态资源
-├─ start.sh             # 构建并启动脚本
-└─ one-click.sh         # Linux 一键安装与管理脚本
+│  └─ src/
+│     ├─ api/           # 唯一 API 客户端和类型
+│     ├─ components/files/ # 统一文件浏览器视图与对话框
+│     ├─ hooks/         # 目录、上传和选择状态
+│     ├─ pages/         # Files、Shares、Settings、登录和公开分享页
+│     └─ components/Layout.tsx
+├─ docs/
+│  ├─ ARCHITECTURE.md
+│  └─ REFACTOR_PLAN.md
+├─ .github/workflows/ci.yml
+├─ scripts/sync_version.py
+├─ start.sh
+└─ one-click.sh
 ```
 
-## 后续规划
+## 安全边界
 
-当前版本已经覆盖个人网盘的基础闭环。后续可以继续加入：
+- 管理员令牌只在登录请求的 `X-Admin-Token` 头中发送一次；成功后签发随机、服务端可吊销的 HttpOnly 会话。每次登录生成新值，锁定与更换令牌会使旧会话失效。
+- 会话保存在进程内，因此服务重启会注销所有管理员，当前部署只支持单进程。
+- 文件以明文保存在 `storage/`；CryoVault 不宣称本地加密或端到端加密。WebDAV 凭据会加密保存，但文件本身仍由远程存储服务管理。
+- 分享密码使用 PBKDF2 哈希。修改密码、撤销分享或到期会阻止后续访问；文件编辑同时受分享权限和 ETag 校验保护。
+- API、上传、会话与错误处理都有回归测试。不要在容器中禁用提权后仍开启网页更新；这种情况下请由宿主机管理员运行更新脚本。
 
-- 分组内嵌套文件夹与文件移动
-- 回收站、恢复和自动清理
-- 断点续传与大文件分片上传
-- 存储配额和磁盘空间提示
-- 大文件列表分页或虚拟滚动
-- 批量重命名和批量移动
-- 多用户、角色和细粒度权限
-- 可选的对象存储后端
+## 已知限制
 
-## 许可证
-
-当前仓库未声明独立许可证。公开发布或二次分发前，请先补充适用的许可证文件。
+- 回收站、断点续传、多用户/角色、对象存储和存储配额不在本版本范围内。
+- 在线编辑的进程内锁不覆盖多进程部署；请保持单 Uvicorn worker。ETag 可防止正常并发覆盖，但进程崩溃期间的文件与数据库一致性没有事务级保证。
+- 管理员会话和登录限流状态在进程内，重启会失效或清空。
+- 一键部署的更新链路需要服务以 root 运行，存在 GitHub/分支内容受信任边界；本次只如实记录，未扩大更新权限。
+- 当前仓库没有声明许可证；公开发布或二次分发前应补充许可证文件。

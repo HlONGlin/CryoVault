@@ -16,6 +16,7 @@ from .. import operations
 from ..config import settings
 from ..database import get_db
 from ..deps import require_admin
+from ..models import FileItem, Group
 from ..schemas import DirectInfo, FileDetail, to_file_out
 
 router = APIRouter(
@@ -144,10 +145,16 @@ def _download_link(url: str, destination: Path) -> tuple[str, str]:
 
 @router.get("", response_model=DirectInfo)
 def direct_info(db: Session = Depends(get_db)):
-    group = operations.get_system_group(db)
+    legacy_group = db.query(Group).filter(Group.is_system.is_(True)).first()
+    files = (
+        db.query(FileItem)
+        .filter(FileItem.folder_id.is_(None))
+        .order_by(FileItem.created_at.desc(), FileItem.id.desc())
+        .all()
+    )
     return DirectInfo(
-        group_id=group.id,
-        files=[to_file_out(f) for f in group.files],
+        group_id=legacy_group.id if legacy_group else None,
+        files=[to_file_out(f) for f in files],
     )
 
 
@@ -162,8 +169,7 @@ def upload_direct_files(
 ):
     if not files:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No files provided")
-    group = operations.get_system_group(db)
-    created = [operations.save_upload(db, group, upload) for upload in files]
+    created = [operations.save_upload(db, None, upload) for upload in files]
     return [to_file_out(f) for f in created]
 
 
@@ -177,7 +183,7 @@ def import_direct_link(payload: LinkImportPayload, db: Session = Depends(get_db)
             name, content_type = _download_link(payload.url, path)
             if payload.name.strip():
                 name = payload.name.strip()
-            file = operations.save_path(db, operations.get_system_group(db), path, name, content_type)
+            file = operations.save_path(db, None, path, name, content_type)
             return to_file_out(file)
         except httpx.HTTPError as exc:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not download the source link: {exc}") from exc

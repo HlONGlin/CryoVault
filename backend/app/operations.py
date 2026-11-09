@@ -16,7 +16,6 @@ from .config import settings
 from .models import FileItem, FileShare, Folder, Group, Share
 from .storage import is_text
 
-SYSTEM_GROUP_NAME = "单文件分享"
 _edit_lock = threading.Lock()
 TREE_WRITE_LOCK = threading.RLock()
 
@@ -25,24 +24,15 @@ def stored_path(file: FileItem) -> Path:
     return settings.storage_dir / file.stored_name
 
 
-def get_system_group(db: Session) -> Group:
-    group = db.query(Group).filter(Group.is_system.is_(True)).first()
-    if group is None:
-        group = Group(
-            name=SYSTEM_GROUP_NAME,
-            description="直接上传并生成链接的单个文件",
-            is_system=True,
-        )
-        db.add(group)
-        db.flush()
-        db.add(Share(token=group.share_token, target_type="folder", folder_id=None,
-                     allow_edit=group.allow_edit, created_at=group.created_at))
-        db.commit()
-        db.refresh(group)
-    return group
-
-
-def get_file_share(db: Session, file: FileItem) -> FileShare | None:
+def get_file_share(db: Session, file: FileItem) -> Share | FileShare | None:
+    unified = (
+        db.query(Share)
+        .filter(Share.target_type == "file", Share.file_id == file.id)
+        .order_by(Share.created_at.desc(), Share.id.desc())
+        .first()
+    )
+    if unified is not None:
+        return unified
     return db.query(FileShare).filter(FileShare.file_id == file.id).first()
 
 
@@ -52,36 +42,42 @@ def get_share_by_token(db: Session, token: str) -> FileShare | None:
 
 def ensure_file_share(
     db: Session, file: FileItem, allow_edit: bool | None = None
-) -> FileShare:
+) -> Share:
     share = get_file_share(db, file)
-    if share is None:
-        share = FileShare(
+    if isinstance(share, FileShare):
+        unified = db.query(Share).filter(Share.token == share.share_token).first()
+        if unified is None:
+            unified = Share(
+                token=share.share_token,
+                target_type="file",
+                file_id=file.id,
+                allow_edit=share.allow_edit,
+                created_at=share.created_at,
+            )
+            db.add(unified)
+        share = unified
+    elif share is None:
+        share = Share(
+            target_type="file",
             file_id=file.id,
             allow_edit=bool(allow_edit),
         )
         db.add(share)
-    elif allow_edit is not None:
+    if allow_edit is not None:
         share.allow_edit = allow_edit
-    db.flush()
-    unified = db.query(Share).filter(Share.token == share.share_token).first()
-    if unified is None:
-        unified = Share(token=share.share_token, target_type="file", file_id=file.id,
-                        allow_edit=share.allow_edit, created_at=share.created_at)
-        db.add(unified)
-    else:
-        unified.allow_edit = share.allow_edit
     db.commit()
     db.refresh(share)
     return share
 
 
 def revoke_file_share(db: Session, file: FileItem) -> None:
-    share = get_file_share(db, file)
-    if share is not None:
-        unified = db.query(Share).filter(Share.token == share.share_token).first()
-        if unified is not None:
-            db.delete(unified)
+    legacy = db.query(FileShare).filter(FileShare.file_id == file.id).all()
+    unified = db.query(Share).filter(Share.target_type == "file", Share.file_id == file.id).all()
+    for share in legacy:
         db.delete(share)
+    for share in unified:
+        db.delete(share)
+    if legacy or unified:
         db.commit()
 
 

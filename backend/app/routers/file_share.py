@@ -17,8 +17,11 @@ router = APIRouter(prefix="/api/file-share", tags=["file-share"])
 
 
 def resolve_share(token: str, db: Session, request: Request):
-    if db.query(Share.id).filter(Share.token == token).first():
-        resolve_unified_share(db, token, request)
+    unified = db.query(Share).filter(Share.token == token).first()
+    if unified is not None:
+        if unified.target_type != "file":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Share link not found")
+        return resolve_unified_share(db, token, request)
     share = operations.get_share_by_token(db, token)
     if share is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Share link not found")

@@ -78,7 +78,7 @@ class PublicFileShare(BaseModel):
 
 
 class DirectInfo(BaseModel):
-    group_id: int
+    group_id: int | None = None
     files: list[FileDetail]
 
 
@@ -98,7 +98,7 @@ def to_file_out(f) -> FileDetail:
 
 def to_file_share_out(share) -> FileShareOut:
     return FileShareOut(
-        share_token=share.share_token,
+        share_token=getattr(share, "share_token", None) or share.token,
         allow_edit=share.allow_edit,
         created_at=share.created_at,
         file=to_file_out(share.file),
@@ -107,7 +107,7 @@ def to_file_share_out(share) -> FileShareOut:
 
 def to_public_file_share(share) -> PublicFileShare:
     return PublicFileShare(
-        share_token=share.share_token,
+        share_token=getattr(share, "share_token", None) or share.token,
         allow_edit=share.allow_edit,
         file=to_file_out(share.file),
     )

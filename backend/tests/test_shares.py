@@ -11,6 +11,8 @@ from app.database import Base, get_db
 from app.deps import require_admin
 from app.models import FileItem, FileShare, Folder, Group, Share
 from app.routers.file_share import router as legacy_file_router
+from app.routers.files import router as files_router
+from app.routers.direct import router as direct_router
 from app.routers.share import router as legacy_folder_router
 from app.routers.shares import admin_router, public_router
 
@@ -160,6 +162,74 @@ def test_legacy_system_share_does_not_expose_other_root_files(tmp_path, monkeypa
     assert [item["id"] for item in client.get(base + "/folders").json()["items"]] == [original_id]
     assert client.get(base + f"/files/{original_id}/download").content == b"a"
     assert client.get(base + f"/files/{added_id}/download").status_code == 404
+    engine.dispose()
+
+
+def test_legacy_file_share_alias_uses_unified_share(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    settings.storage_dir.mkdir()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    with sessions.begin() as session:
+        file = FileItem(name="a.txt", stored_name="a", size=1, mime_type="text/plain")
+        session.add(file)
+        session.flush()
+        file_id = file.id
+    (settings.storage_dir / "a").write_bytes(b"a")
+
+    app = FastAPI()
+    app.include_router(files_router)
+    app.include_router(legacy_file_router)
+
+    def test_db():
+        with sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = test_db
+    app.dependency_overrides[require_admin] = lambda: None
+    client = TestClient(app)
+    created = client.post(f"/api/files/{file_id}/share", json={"allow_edit": True})
+    assert created.status_code == 200
+    token = created.json()["share_token"]
+    assert client.get(f"/api/file-share/{token}").status_code == 200
+    with sessions() as session:
+        assert session.query(Share).count() == 1
+        assert session.query(FileShare).count() == 0
+    assert client.delete(f"/api/files/{file_id}/share").status_code == 204
+    assert client.get(f"/api/file-share/{token}").status_code == 404
+    engine.dispose()
+
+
+def test_direct_compatibility_uses_root_without_system_group(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    settings.storage_dir.mkdir()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    app = FastAPI()
+    app.include_router(direct_router)
+
+    def test_db():
+        with sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = test_db
+    app.dependency_overrides[require_admin] = lambda: None
+    client = TestClient(app)
+    uploaded = client.post(
+        "/api/direct/files",
+        files=[("files", ("root.txt", b"root", "text/plain"))],
+    )
+    assert uploaded.status_code == 201
+    assert uploaded.json()[0]["folder_id"] is None
+    listing = client.get("/api/direct")
+    assert listing.status_code == 200
+    assert listing.json()["group_id"] is None
+    assert [item["name"] for item in listing.json()["files"]] == ["root.txt"]
+    with sessions() as session:
+        assert session.query(Group).count() == 0
+        assert session.query(Share).count() == 0
     engine.dispose()
 
 

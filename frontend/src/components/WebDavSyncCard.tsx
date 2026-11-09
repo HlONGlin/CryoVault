@@ -73,16 +73,16 @@ export function WebDavSyncCard() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-app-text">WebDAV 双向同步</h2>
-            <p className="mt-1 text-xs text-app-muted">同步已暂停，等待新版目录路径映射完成；现有远端数据不会被修改。</p>
+            <p className="mt-1 text-xs text-app-muted">目录移动不会改变远端路径；无法认领的远端文件会保留并记录。</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-outline text-xs" onClick={testConnection} disabled={busy || !status.configured}>
+          <button className="btn-outline text-xs" onClick={testConnection} disabled={busy || status.running || !status.configured}>
             测试连接
           </button>
-          <button className="btn-primary text-xs" onClick={runSync} disabled>
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            立即同步
+          <button className="btn-primary text-xs" onClick={runSync} disabled={busy || status.running || !status.configured}>
+            {(busy || status.running) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {busy || status.running ? "同步中…" : "立即同步"}
           </button>
         </div>
       </div>

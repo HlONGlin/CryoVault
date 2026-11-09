@@ -114,16 +114,18 @@ def main() -> None:
     check("public edit", saved.status_code == 200 and "7070" in saved.json()["content"])
 
     direct = client.get("/api/direct").json()
-    check("direct group", isinstance(direct["group_id"], int))
+    check("direct root", direct["group_id"] is None)
     direct_upload = client.post(
         "/api/direct/files",
         files=[("files", ("direct.txt", b"direct upload", "text/plain"))],
     ).json()
     check("direct upload", direct_upload[0]["name"] == "direct.txt")
-    check("direct list", len(client.get("/api/direct").json()["files"]) == 1)
+    check("direct upload folder", direct_upload[0]["folder_id"] is None)
+    direct_listing = client.get("/api/direct").json()
     check(
-        "system group hidden",
-        all(g["name"] != "单文件分享" for g in client.get("/api/groups").json()),
+        "direct listing root",
+        len(direct_listing["files"]) == 1
+        and direct_listing["files"][0]["folder_id"] is None,
     )
     check_direct_link_import()
 
