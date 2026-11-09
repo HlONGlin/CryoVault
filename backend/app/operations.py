@@ -114,11 +114,7 @@ def _unique_name(db: Session, name: str, folder_id: int | None, exclude_id: int 
         index += 1
 
 
-def safe_mime_type(name: str, declared: str | None = None) -> str:
-    """Choose a MIME type from the filename, with a tightly cleaned fallback."""
-    guessed = mimetypes.guess_type(name)[0]
-    if guessed:
-        return guessed
+def _clean_declared_mime_type(declared: str | None) -> str | None:
     candidate = (declared or "").split(";", 1)[0].strip().lower()
     if (
         candidate
@@ -130,7 +126,24 @@ def safe_mime_type(name: str, declared: str | None = None) -> str:
         and not candidate.endswith(("+xml", "/xml", "/html", "/javascript"))
     ):
         return candidate
-    return "application/octet-stream"
+    return None
+
+
+def safe_mime_type(name: str, declared: str | None = None) -> str:
+    """Choose a deterministic MIME type while allowing a tightly cleaned fallback."""
+    declared_type = _clean_declared_mime_type(declared)
+    # ".ts" is TypeScript source on some platforms and MPEG-TS video on others.
+    # Keep the MIME database out of that decision: only an explicit video type
+    # selects video, otherwise preserve the common developer-file meaning.
+    if Path(name).suffix.lower() == ".ts":
+        if declared_type and declared_type.startswith("video/"):
+            return declared_type
+        return "text/plain"
+
+    guessed = mimetypes.guess_type(name)[0]
+    if guessed:
+        return guessed
+    return declared_type or "application/octet-stream"
 
 
 def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id: int | None = None) -> FileItem:
@@ -172,7 +185,7 @@ def save_upload(db: Session, group: Group | None, upload: UploadFile, folder_id:
                 name=original_name,
                 stored_name=stored_name,
                 size=size,
-                mime_type=safe_mime_type(original_name),
+                mime_type=safe_mime_type(original_name, upload.content_type),
             )
             db.add(file)
             db.commit()

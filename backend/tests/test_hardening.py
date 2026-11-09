@@ -107,6 +107,8 @@ def test_mime_type_is_derived_from_name_and_rejects_active_fallbacks():
     assert operations.safe_mime_type("payload.unknown", "image/svg+xml") == "application/octet-stream"
     assert operations.safe_mime_type("payload.unknown", "image/png") == "image/png"
     assert operations.safe_mime_type("payload.unknown", "bad" + chr(13) + "mime") == "application/octet-stream"
+    assert operations.safe_mime_type("source.ts", "text/typescript") == "text/plain"
+    assert operations.safe_mime_type("segment.ts", "video/mp2t") == "video/mp2t"
 
 
 def test_save_path_cleans_storage_when_database_commit_fails(tmp_path, monkeypatch):
